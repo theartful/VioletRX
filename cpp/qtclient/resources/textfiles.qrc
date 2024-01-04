@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/textfiles">
+        <file>kbd-shortcuts.txt</file>
+        <file>bandplan.csv</file>
+    </qresource>
+</RCC>

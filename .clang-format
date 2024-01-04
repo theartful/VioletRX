@@ -1,0 +1,17 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+---
+Language: Cpp
+DerivePointerAlignment: false
+PointerAlignment: Left
+PPIndentWidth: 4
+IndentPPDirectives: AfterHash
+AccessModifierOffset: -4
+BreakConstructorInitializers: AfterColon
+PackConstructorInitializers: NextLine
+BreakBeforeBraces: Linux
+AlwaysBreakTemplateDeclarations: Yes
+---
+Language: Proto
+AllowShortEnumsOnASingleLine: false
+---

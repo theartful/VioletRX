@@ -1,0 +1,16 @@
+[package]
+name = "egui-client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+violetrx-c = { path = "../violetrx-c/" }
+violetrx-traits = { path = "../violetrx-traits/" }
+futures = "0.3.28"
+tokio = { version = "1.23.0", features = ["rt-multi-thread", "macros", "time"] }
+tokio-util = "0.7.8"
+anyhow = "1.0.72"
+eframe = "0.22.0"
+egui_extras = { version = "0.22.0", features = ["svg"] }

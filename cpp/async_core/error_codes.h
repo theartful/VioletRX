@@ -1,0 +1,37 @@
+#ifndef ASYNC_CORE_ERROR_CODES_H
+#define ASYNC_CORE_ERROR_CODES_H
+
+#include <string>
+
+namespace core
+{
+
+enum ErrorCode : int {
+    OK = 0,
+    WORKER_BUSY = 1,
+    GAIN_NOT_FOUND = 2,
+    ALREADY_RECORDING = 3,
+    ALREADY_NOT_RECORDING = 4,
+    INVALID_INPUT_DEVICE = 5,
+    INVALID_FILTER = 6,
+    INVALID_FILTER_OFFSET = 7,
+    INVALID_CW_OFFSET = 8,
+    INVALID_DEMOD = 9,
+    VFO_NOT_FOUND = 10,
+    DEMOD_IS_OFF = 11,
+    NOT_RUNNING = 12,
+    COULDNT_CREATE_FILE = 13,
+    SNIFFER_ALREADY_ACTIVE = 14,
+    SNIFFER_ALREADY_INACTIVE = 15,
+    INSUFFICIENT_BUFFER_SIZE = 16,
+    RDS_ALREADY_ACTIVE = 17,
+    RDS_ALREADY_INACTIVE = 18,
+    INVALID_NOISE_BLANKER_ID = 19,
+    UNKNOWN_ERROR = 99999,
+};
+
+const char* errorMsg(ErrorCode code);
+
+} // namespace core
+
+#endif

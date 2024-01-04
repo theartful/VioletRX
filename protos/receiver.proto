@@ -1,0 +1,435 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+package Receiver;
+
+enum ErrorCode {
+    OK = 0; BUSY = 1; GAIN_NOT_FOUND = 2; ALREADY_RECORDING = 3;
+    ALREADY_NOT_RECORDING = 4;
+    INVALID_INPUT_DEVICE = 5;
+    INVALID_FILTER = 6;
+    INVALID_FILTER_OFFSET = 7;
+    INVALID_CW_OFFSET = 8;
+    INVALID_DEMOD = 9;
+    VFO_NOT_FOUND = 10;
+    DEMOD_IS_OFF = 11;
+    NOT_RUNNING = 12;
+    COULDNT_CREATE_FILE = 13;
+    SNIFFER_ALREADY_ACTIVE = 14;
+    SNIFFER_ALREADY_INACTIVE = 15;
+    INSUFFICIENT_BUFFER_SIZE = 16;
+    RDS_ALREADY_ACTIVE = 17;
+    RDS_ALREADY_INACTIVE = 18;
+    INVALID_NOISE_BLANKER_ID = 19;
+    UNKNOWN_ERROR = 99999;
+}
+
+enum DemodType {
+    OFF = 0; RAW = 1; AM = 2; AM_SYNC = 3; LSB = 4; USB = 5; CWL = 6; CWU = 7;
+    NFM = 8;
+    WFM_MONO = 9;
+    WFM_STEREO = 10;
+    WFM_STEREO_OIRT = 11;
+}
+
+enum WindowType {
+    HAMMING = 0; HANN = 1; BLACKMAN = 2; RECTANGULAR = 3; KAISER = 4;
+    BLACKMAN_HARRIS = 5;
+    BARTLETT = 6;
+    FLATTOP = 7;
+    NUTTALL = 8;
+    NUTTALL_CFD = 9;
+    WELCH = 10;
+    PARZEN = 11;
+    EXPONENTIAL = 12;
+    RIEMANN = 13;
+    GAUSSIAN = 14;
+    TUKEY = 15;
+}
+
+enum FilterShape { SOFT = 0; NORMAL = 1; SHARP = 2; }
+
+message GainStage
+{
+    string name = 1;
+    double start = 2;
+    double stop = 3;
+    double step = 4;
+    double value = 5;
+}
+
+// receiver events
+message SyncStart {}
+message SyncEnd {}
+message Started {}
+message Stopped {}
+message InputDeviceChanged { string device = 1; }
+message AntennaChanged { string antenna = 1; }
+message InputRateChanged { uint32 rate = 1; }
+message InputDecimChanged { uint32 decim = 1; }
+message IqSwapChanged { bool enabled = 1; }
+message DcCancelChanged { bool enabled = 1; }
+message IqBalanceChanged { bool enabled = 1; }
+message RfFreqChanged { uint64 freq = 1; }
+message GainStagesChanged { repeated GainStage stages = 1; }
+message AntennasChanged { repeated string antennas = 1; }
+message AutoGainChanged { bool enabled = 1; }
+message GainChanged
+{
+    string name = 1;
+    double value = 2;
+}
+message FreqCorrChanged { double ppm = 1; }
+message FftSizeChanged { uint32 size = 1; }
+message FftWindowChanged { WindowType window = 1; }
+
+// vfo events
+message VfoAdded { uint64 handle = 1; }
+message VfoRemoved { uint64 handle = 1; }
+message DemodChanged
+{
+    uint64 handle = 1;
+    DemodType demod = 2;
+}
+message OffsetChanged
+{
+    uint64 handle = 1;
+    int32 offset = 2;
+}
+message CwOffsetChanged
+{
+    uint64 handle = 1;
+    int32 offset = 2;
+}
+message FilterChanged
+{
+    uint64 handle = 1;
+    int32 low = 2;
+    int32 high = 3;
+    FilterShape shape = 4;
+}
+message NoiseBlankerOnChanged
+{
+    uint64 handle = 1;
+    int32 id = 2;
+    bool enabled = 3;
+}
+message NoiseBlankerThresholdChanged
+{
+    uint64 handle = 1;
+    int32 id = 2;
+    float threshold = 3;
+}
+message SqlLevelChanged
+{
+    uint64 handle = 1;
+    double level = 2;
+}
+message SqlAlphaChanged
+{
+    uint64 handle = 1;
+    double alpha = 2;
+}
+message AgcOnChanged
+{
+    uint64 handle = 1;
+    bool enabled = 2;
+}
+message AgcHangChanged
+{
+    uint64 handle = 1;
+    bool enabled = 2;
+}
+message AgcThresholdChanged
+{
+    uint64 handle = 1;
+    int32 threshold = 2;
+}
+message AgcSlopeChanged
+{
+    uint64 handle = 1;
+    int32 slope = 2;
+}
+message AgcDecayChanged
+{
+    uint64 handle = 1;
+    int32 decay = 2;
+}
+message AgcManualGainChanged
+{
+    uint64 handle = 1;
+    int32 gain = 2;
+}
+message FmMaxDevChanged
+{
+    uint64 handle = 1;
+    float maxdev = 2;
+}
+message FmDeemphChanged
+{
+    uint64 handle = 1;
+    double tau = 2;
+}
+message AmDcrChanged
+{
+    uint64 handle = 1;
+    bool enabled = 2;
+}
+message AmSyncDcrChanged
+{
+    uint64 handle = 1;
+    bool enabled = 2;
+}
+message AmSyncPllBwChanged
+{
+    uint64 handle = 1;
+    float bw = 2;
+}
+message RecordingStarted
+{
+    uint64 handle = 1;
+    string path = 2;
+}
+message RecordingStopped { uint64 handle = 1; }
+message SnifferStarted
+{
+    uint64 handle = 1;
+    uint32 samplerate = 2;
+    uint32 buffsize = 3;
+}
+message SnifferStopped { uint64 handle = 1; }
+message RdsDecoderStarted { uint64 handle = 1; }
+message RdsDecoderStopped { uint64 handle = 1; }
+message RdsParserReset { uint64 handle = 1; }
+
+message FftFrame
+{
+    google.protobuf.Timestamp timestamp = 1;
+    double center_freq = 2;
+    double sample_rate = 3;
+    repeated float data = 4 [packed = true];
+}
+
+message Transaction
+{
+    uint64 id = 1;
+    google.protobuf.Timestamp timestamp = 2;
+    oneof tx
+    {
+        SyncStart sync_start = 3;
+        SyncEnd sync_end = 4;
+        Started rx_started = 5;
+        Stopped rx_stopped = 6;
+        InputDeviceChanged input_dev_changed = 7;
+        AntennaChanged antenna_changed = 8;
+        InputRateChanged input_rate_changed = 9;
+        InputDecimChanged input_decim_changed = 10;
+        IqSwapChanged iq_swap_changed = 11;
+        DcCancelChanged dc_cancel_changed = 12;
+        IqBalanceChanged iq_balance_changed = 13;
+        RfFreqChanged rf_freq_changed = 14;
+        GainStagesChanged gain_stages_changed = 15;
+        AntennasChanged antennas_changed = 16;
+        AutoGainChanged auto_gain_changed = 17;
+        GainChanged gain_changed = 18;
+        FreqCorrChanged freq_corr_changed = 19;
+        FftSizeChanged fft_size_changed = 20;
+        FftWindowChanged fft_window_changed = 21;
+        VfoAdded vfo_added = 22;
+        VfoRemoved vfo_removed = 23;
+        DemodChanged demod_changed = 24;
+        OffsetChanged offset_changed = 25;
+        CwOffsetChanged cw_offset_changed = 26;
+        FilterChanged filter_changed = 27;
+        NoiseBlankerOnChanged nb_on_changed = 28;
+        NoiseBlankerThresholdChanged nb_threshold_changed = 29;
+        SqlLevelChanged sql_level_changed = 30;
+        AgcOnChanged agc_on_changed = 31;
+        AgcHangChanged agc_hang_changed = 32;
+        AgcThresholdChanged agc_threshold_changed = 33;
+        AgcSlopeChanged agc_slope_changed = 34;
+        AgcDecayChanged agc_decay_changed = 35;
+        AgcManualGainChanged agc_manual_gain_changed = 36;
+        FmMaxDevChanged fm_maxdev_changed = 37;
+        FmDeemphChanged fm_deemph_changed = 38;
+        AmDcrChanged am_dcr_changed = 39;
+        AmSyncPllBwChanged am_sync_pll_bw_changed = 40;
+        RecordingStarted recording_started = 41;
+        RecordingStopped recording_stopped = 42;
+        SnifferStarted sniffer_started = 43;
+        SnifferStopped sniffer_stopped = 44;
+        RdsDecoderStarted rds_decoder_started = 45;
+        RdsDecoderStopped rds_decoder_stopped = 46;
+        RdsParserReset rds_parser_reset = 47;
+    }
+}
+
+message EmptyResponse { ErrorCode code = 1; }
+
+message DoubleResponse
+{
+    ErrorCode code = 1;
+    double value = 2;
+}
+
+message FloatResponse
+{
+    ErrorCode code = 1;
+    float value = 2;
+}
+
+message UInt64Response
+{
+    ErrorCode code = 1;
+    uint64 value = 2;
+}
+
+message SetGainRequest
+{
+    string name = 1;
+    double value = 2;
+}
+
+message SetFftWindowRequest { WindowType window_type = 1; }
+
+message FftFrameResponse
+{
+    ErrorCode code = 1;
+    FftFrame fft_frame = 2;
+}
+
+message VfoUInt64Request
+{
+    uint64 handle = 1;
+    uint64 value = 2;
+}
+
+message VfoFloatRequest
+{
+    uint64 handle = 1;
+    double value = 2;
+}
+
+message VfoDoubleRequest
+{
+    uint64 handle = 1;
+    double value = 2;
+}
+
+message VfoBoolRequest
+{
+    uint64 handle = 1;
+    bool value = 2;
+}
+
+message VfoInt32Request
+{
+    uint64 handle = 1;
+    bool value = 2;
+}
+
+message VfoRequest { uint64 handle = 1; }
+
+message VfoFilterRequest
+{
+    uint64 handle = 1;
+    int64 low = 2;
+    int64 high = 3;
+    FilterShape shape = 4;
+}
+
+message VfoRecordingRequest
+{
+    uint64 handle = 1;
+    string path = 2;
+}
+
+message VfoDemodRequest
+{
+    uint64 handle = 1;
+    DemodType demod = 2;
+}
+
+message VfoNoiseBlankerRequest
+{
+    uint64 handle = 1;
+    int32 id = 2;
+    bool enabled = 3;
+}
+
+message VfoNoiseBlankerThresholdRequest
+{
+    uint64 handle = 1;
+    int32 id = 2;
+    float threshold = 3;
+}
+
+message VfoSnifferRequest
+{
+    uint64 handle = 1;
+    uint32 samplerate = 2;
+    uint32 buffsize = 3;
+}
+
+message SnifferData { repeated float data = 1 [packed = true]; }
+
+message RdsData
+{
+    string data = 1;
+    int32 type = 2;
+}
+
+service Rx
+{
+    rpc Subscribe(google.protobuf.Empty) returns(stream Transaction);
+    rpc Start(google.protobuf.Empty) returns(EmptyResponse);
+    rpc Stop(google.protobuf.Empty) returns(EmptyResponse);
+    rpc SetInputDevice(google.protobuf.StringValue) returns(EmptyResponse);
+    rpc SetAntenna(google.protobuf.StringValue) returns(EmptyResponse);
+    rpc SetInputRate(google.protobuf.UInt32Value) returns(EmptyResponse);
+    rpc SetInputDecim(google.protobuf.UInt32Value) returns(EmptyResponse);
+    rpc SetIqSwap(google.protobuf.BoolValue) returns(EmptyResponse);
+    rpc SetDcCancel(google.protobuf.BoolValue) returns(EmptyResponse);
+    rpc SetIqBalance(google.protobuf.BoolValue) returns(EmptyResponse);
+    rpc SetAutoGain(google.protobuf.BoolValue) returns(EmptyResponse);
+    rpc SetRfFreq(google.protobuf.UInt64Value) returns(UInt64Response);
+    rpc SetGain(SetGainRequest) returns(DoubleResponse);
+    rpc SetFreqCorr(google.protobuf.DoubleValue) returns(DoubleResponse);
+    rpc SetFftSize(google.protobuf.UInt32Value) returns(EmptyResponse);
+    rpc SetFftWindow(SetFftWindowRequest) returns(EmptyResponse);
+    rpc GetFftData(google.protobuf.Empty) returns(FftFrameResponse);
+
+    rpc SetFilterOffset(VfoUInt64Request) returns(EmptyResponse);
+    rpc SetFilter(VfoFilterRequest) returns(EmptyResponse);
+    rpc SetCwOffset(VfoUInt64Request) returns(EmptyResponse);
+    rpc SetDemod(VfoDemodRequest) returns(EmptyResponse);
+    rpc GetSignalPwr(VfoRequest) returns(FloatResponse);
+    rpc SetNoiseBlanker(VfoNoiseBlankerRequest) returns(EmptyResponse);
+    rpc SetNoiseBlankerThreshold(VfoNoiseBlankerThresholdRequest)
+        returns(EmptyResponse);
+    rpc SetSqlLevel(VfoDoubleRequest) returns(EmptyResponse);
+    rpc SetSqlAlpha(VfoDoubleRequest) returns(EmptyResponse);
+    rpc SetAgcOn(VfoBoolRequest) returns(EmptyResponse);
+    rpc SetAgcHang(VfoBoolRequest) returns(EmptyResponse);
+    rpc SetAgcThreshold(VfoInt32Request) returns(EmptyResponse);
+    rpc SetAgcSlope(VfoInt32Request) returns(EmptyResponse);
+    rpc SetAgcDecay(VfoInt32Request) returns(EmptyResponse);
+    rpc SetAgcManualGain(VfoInt32Request) returns(EmptyResponse);
+    rpc SetFmMaxDev(VfoFloatRequest) returns(EmptyResponse);
+    rpc SetFmDeemph(VfoDoubleRequest) returns(EmptyResponse);
+    rpc SetAmDcr(VfoBoolRequest) returns(EmptyResponse);
+    rpc SetAmSyncDcr(VfoBoolRequest) returns(EmptyResponse);
+    rpc SetAmSyncPllBw(VfoFloatRequest) returns(EmptyResponse);
+    rpc StartAudioRecording(VfoRecordingRequest) returns(EmptyResponse);
+    rpc StopAudioRecording(VfoRequest) returns(EmptyResponse);
+    rpc StartSniffer(VfoSnifferRequest) returns(EmptyResponse);
+    rpc StopSniffer(VfoRequest) returns(EmptyResponse);
+    rpc GetSnifferData(VfoRequest) returns(SnifferData);
+    rpc StartRdsDecoder(VfoRequest) returns(EmptyResponse);
+    rpc StopRdsDecoder(VfoRequest) returns(EmptyResponse);
+    rpc ResetRdsParser(VfoRequest) returns(EmptyResponse);
+    rpc GetRdsData(VfoRequest) returns(RdsData);
+}
