@@ -17,7 +17,7 @@ typedef struct {
 } VioletEventGeneric;
 }
 
-namespace core
+namespace violetrx
 {
 
 // The lifetime of CEvent is tied to the event it is constructed from.
@@ -50,6 +50,6 @@ private:
     VioletEventGeneric inner_;
 };
 
-} // namespace core
+} // namespace violetrx
 
 #endif // EVENTS_CONVERSION_H

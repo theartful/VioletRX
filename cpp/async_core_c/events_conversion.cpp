@@ -1,6 +1,6 @@
 #include "events_conversion.h"
 
-namespace core
+namespace violetrx
 {
 
 namespace
@@ -516,4 +516,4 @@ CEvent::~CEvent()
     }
 }
 
-} // namespace core
+} // namespace violetrx

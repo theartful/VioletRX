@@ -8,7 +8,7 @@
 #include <functional>
 #include <thread>
 
-namespace core
+namespace violetrx
 {
 class WorkerThread
 {
@@ -82,6 +82,6 @@ private:
     std::jthread thread;
     std::atomic<const char*> lastCmd;
 };
-} // namespace core
+} // namespace violetrx
 
 #endif // WORKER_THREAD_H

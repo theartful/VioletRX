@@ -5,7 +5,7 @@
 #include <fmt/chrono.h>
 #include <spdlog/spdlog.h>
 
-namespace core
+namespace violetrx
 {
 
 static constexpr uint64_t FACTOR = (1 << 16);
@@ -105,4 +105,4 @@ void WorkerThread::startEventLoop(std::stop_token stopToken)
 
 std::thread::id WorkerThread::getId() { return thread.get_id(); }
 
-} // namespace core
+} // namespace violetrx

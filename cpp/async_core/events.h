@@ -1,14 +1,13 @@
 #ifndef CORE_EVENTS
 #define CORE_EVENTS
 
-#include <chrono>
 #include <cstdint>
 #include <function2/function2.hpp>
 #include <variant>
 
 #include "async_core/types.h"
 
-namespace core
+namespace violetrx
 {
 
 struct EventCommon {
@@ -223,8 +222,8 @@ using Event = std::variant<
     SnifferStopped, UdpStreamingStarted, UdpStreamingStopped, RdsDecoderStarted,
     RdsDecoderStopped, RdsParserReset>;
 
-using ReceiverSubCallback = fu2::function<void(const ReceiverEvent&)>;
-using VfoSubCallback = fu2::function<void(const VfoEvent&)>;
+using ReceiverEventHandler = fu2::function<void(const ReceiverEvent&)>;
+using VfoEventHandler = fu2::function<void(const VfoEvent&)>;
 
 template <class... Ts>
 struct Visitor : Ts... {
@@ -233,6 +232,6 @@ struct Visitor : Ts... {
 template <class... Ts>
 Visitor(Ts...) -> Visitor<Ts...>;
 
-} // namespace core
+} // namespace violetrx
 
 #endif

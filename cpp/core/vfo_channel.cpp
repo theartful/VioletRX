@@ -1,4 +1,3 @@
-#include <array>
 #include <stdexcept>
 
 #include "dsp/multichannel_downconverter.h"
@@ -520,7 +519,7 @@ bool vfo_channel::start_sniffer(int samprate, int buffsize)
     unlock();
     d_sniffer_active = true;
 
-    d_sniffer_params = { samprate, buffsize };
+    d_sniffer_params = {samprate, buffsize};
 
     return true;
 }

@@ -132,9 +132,9 @@ bool violet_vfo_is_noise_blanker2_on(VioletVfo* vfo);
 float violet_vfo_get_noise_blanker1_threshold(VioletVfo* vfo);
 float violet_vfo_get_noise_blanker2_threshold(VioletVfo* vfo);
 
-VioletConnection* violet_vfo_subscribe(VioletVfo* vfo,
-                                       VioletVfoEventCallback callback,
-                                       void* userdata);
+void violet_vfo_subscribe(VioletVfo* vfo, VioletVfoEventHandler handler,
+                          void* userdata, VioletConnectionCallback callback,
+                          void* userdata2);
 }
 
 #if __cplusplus

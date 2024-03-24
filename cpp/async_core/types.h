@@ -5,14 +5,13 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
-#include <type_traits>
 
 #include <boost/signals2.hpp>
 #include <function2/function2.hpp>
 
 #include "async_core/error_codes.h"
 
-namespace core
+namespace violetrx
 {
 
 class AsyncVfoIface;
@@ -106,7 +105,6 @@ enum class WindowType {
     GAUSSIAN = 14,
     TUKEY = 15,
 };
-
 template <typename... Args>
 using Callback = fu2::unique_function<void(ErrorCode, Args...)>;
 
@@ -129,6 +127,6 @@ static inline Timestamp now()
     return timepoint_to_timestamp(std::chrono::system_clock::now());
 }
 
-} // namespace core
+} // namespace violetrx
 
 #endif

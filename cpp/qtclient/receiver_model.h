@@ -16,12 +16,12 @@
 
 class ReceiverModel;
 
-using core::Demod;
-using core::FilterRange;
-using core::FilterShape;
-using core::WindowType;
-using Filter = core::Filter;
-using Timestamp = core::Timestamp;
+using violetrx::Demod;
+using violetrx::FilterRange;
+using violetrx::FilterShape;
+using violetrx::WindowType;
+using Filter = violetrx::Filter;
+using Timestamp = violetrx::Timestamp;
 
 struct FftFrame {
     Timestamp timestamp;
@@ -39,7 +39,7 @@ struct RdsData {
     int type;
 };
 
-// YUCK: same as core::GainStage, but using QString instead of std::string
+// YUCK: same as violetrx::GainStage, but using QString instead of std::string
 struct GainStage {
     QString name;
     double start;
@@ -64,7 +64,7 @@ class VFOChannelModel : public QObject
     friend class ReceiverModel;
 
 public:
-    VFOChannelModel(ReceiverModel* parent, core::AsyncVfoIfaceSptr);
+    VFOChannelModel(ReceiverModel* parent, violetrx::AsyncVfoIfaceSptr);
     ~VFOChannelModel();
 
     ReceiverModel* parentModel() const;
@@ -134,7 +134,7 @@ public:
     FilterPreset getFilterPreset(Demod) const;
 
     uint64_t getId() const;
-    core::AsyncVfoIfaceSptr inner() { return vfo; }
+    violetrx::AsyncVfoIfaceSptr inner() { return vfo; }
 
     // user data
     void setActive(bool);
@@ -339,7 +339,7 @@ private:
 
 private:
     ReceiverModel* parent;
-    core::AsyncVfoIfaceSptr vfo;
+    violetrx::AsyncVfoIfaceSptr vfo;
 
     /* properties */
 
@@ -407,7 +407,7 @@ class ReceiverModel : public QObject
 
 public:
     ReceiverModel(QObject* parent = nullptr);
-    ReceiverModel(core::AsyncReceiverIfaceSptr, QObject* parent = nullptr);
+    ReceiverModel(violetrx::AsyncReceiverIfaceSptr, QObject* parent = nullptr);
 
     ~ReceiverModel();
 
@@ -526,7 +526,7 @@ private:
     void onIqBalanceChanged(bool);
     void onCenterFreqChanged(int64_t);
     void onRfFreqChanged(int64_t);
-    void onGainStagesChanged(std::vector<core::GainStage>);
+    void onGainStagesChanged(std::vector<violetrx::GainStage>);
     void onAntennasChanged(std::vector<std::string>);
     void onAutoGainChanged(bool);
     void onGainChanged(std::string, double);
@@ -535,13 +535,13 @@ private:
     void onIqFftWindowChanged(WindowType, bool);
     void onIqRecordingStarted(std::string);
     void onIqRecordingStopped();
-    void onVfoAdded(core::AsyncVfoIfaceSptr);
-    void onVfoRemoved(core::AsyncVfoIfaceSptr);
+    void onVfoAdded(violetrx::AsyncVfoIfaceSptr);
+    void onVfoRemoved(violetrx::AsyncVfoIfaceSptr);
 
-    VFOChannelModel* addVfoIfDoesntExist(core::AsyncVfoIfaceSptr);
+    VFOChannelModel* addVfoIfDoesntExist(violetrx::AsyncVfoIfaceSptr);
 
 private:
-    core::AsyncReceiverIfaceSptr rx;
+    violetrx::AsyncReceiverIfaceSptr rx;
     QList<VFOChannelModel*> vfos;
 
     VFOChannelModel* m_activeVfo;

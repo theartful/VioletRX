@@ -75,9 +75,9 @@ VioletWindowType violet_rx_get_fft_window(VioletReceiver* rx);
 int violet_rx_get_vfos_count(VioletReceiver* rx);
 VioletVfo* violet_rx_get_vfo(VioletReceiver* rx, int idx);
 
-VioletConnection* violet_rx_subscribe(VioletReceiver* rx,
-                                      VioletEventCallback callback,
-                                      void* userdata);
+void violet_rx_subscribe(VioletReceiver* rx, VioletEventHandler handler,
+                         void* userdata, VioletConnectionCallback callback,
+                         void* userdata2);
 void violet_unsubscribe(VioletConnection* connection);
 
 #ifdef __cplusplus

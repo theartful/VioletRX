@@ -1,11 +1,10 @@
 #ifndef ASYNC_CORE_ERROR_CODES_H
 #define ASYNC_CORE_ERROR_CODES_H
 
-#include <string>
-
-namespace core
+namespace violetrx
 {
 
+// FIXME: What about gRPC specific errors?
 enum ErrorCode : int {
     OK = 0,
     WORKER_BUSY = 1,
@@ -27,11 +26,12 @@ enum ErrorCode : int {
     RDS_ALREADY_ACTIVE = 17,
     RDS_ALREADY_INACTIVE = 18,
     INVALID_NOISE_BLANKER_ID = 19,
+    CALL_ERROR = 20,
     UNKNOWN_ERROR = 99999,
 };
 
 const char* errorMsg(ErrorCode code);
 
-} // namespace core
+} // namespace violetrx
 
 #endif

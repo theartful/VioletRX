@@ -711,10 +711,6 @@ impl AsyncReceiver for CAsyncReceiver {
         Self { handle }
     }
 
-    async fn subscribe(&self) -> VioletResult<()> {
-        Ok(())
-    }
-
     async fn start(&self) -> VioletResult<()> {
         let (sender, receiver) = futures::channel::oneshot::channel::<c_int>();
         let boxed_sender = Box::new(sender);

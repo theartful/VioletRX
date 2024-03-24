@@ -1,12 +1,18 @@
 #include "async_vfo.h"
 #include "async_core/events.h"
 #include "async_core/worker_thread.h"
-#include "core/receiver.h"
 #include "error_codes.h"
+
+// FIXME: We need this becausae "start_audio_recording" checks first whether the
+// receiver is running or not. I think that this is generally really bad, since
+// error checking should be done in the "receiver" and "vfo" classes, and not in
+// the "async_receiver" and "async_vfo" classes. These should only return the
+// error codes.
+#include "core/receiver.h" // IWYU: pragma keep
 
 #include <memory>
 
-namespace core
+namespace violetrx
 {
 
 #define CALLBACK_ON_ERROR(code)                                                \
@@ -250,7 +256,7 @@ AsyncVfo::AsyncVfo(vfo_channel::sptr vfo_, WorkerThread::sptr workerThread_) :
 {
 }
 
-AsyncVfo::~AsyncVfo() {}
+AsyncVfo::~AsyncVfo() { spdlog::debug("AsyncVfo::~AsyncVfo"); }
 
 void AsyncVfo::setFilterOffset(int64_t offset, Callback<> callback)
 {
@@ -464,6 +470,8 @@ void AsyncVfo::setDemod(Demod demod, Callback<> callback)
         vfo->reset_rds_parser();
 
         m_demod = demod;
+
+        CALLBACK_ON_SUCCESS();
         stateChanged<DemodChanged>();
 
         bool invalidFilter = true;
@@ -996,95 +1004,72 @@ void AsyncVfo::prepareToDie()
     stateChanged<VfoRemoved>();
 }
 
-Connection AsyncVfo::subscribe(VfoSubCallback callback)
+void AsyncVfo::subscribe(VfoEventHandler handler, Callback<Connection> callback)
 {
-    // TODO: Find a better way to do this
-    struct State {
-        std::weak_ptr<AsyncVfo> wptr;
-        bool syncstart_sent;
-        VfoSubCallback callback;
-    };
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
 
-    std::shared_ptr<State> state = std::make_shared<State>(
-        State{static_pointer_cast<AsyncVfo>(shared_from_this()), false,
-              std::move(callback)});
-
-    auto lambda = [state](VfoEvent event) mutable {
-        if (std::holds_alternative<VfoSyncStart>(event)) {
-            state->callback(event);
-            state->syncstart_sent = true;
-        } else if (state->syncstart_sent) {
-            state->callback(event);
-        } else {
-            // we didn't receiver SyncStart yet, so we ignore these events
-            // until we synchronize first
+    schedule([self, handler = std::move(handler),
+              callback = std::move(callback), handle = getId()]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            callback(violetrx::ErrorCode::VFO_NOT_FOUND, {});
+            return;
         }
-    };
 
-    Connection result = signalStateChanged.connect(lambda);
+        callback(violetrx::ErrorCode::OK,
+                 sptr->signalStateChanged.connect(handler));
 
-    schedule([state, lambda, handle = getId()]() mutable {
         VfoEventCommon ec;
         ec.id = -1;
         ec.timestamp = {};
         ec.handle = handle;
 
-        auto sptr = state->wptr.lock();
-        if (!sptr || sptr->m_removed) {
-            lambda(VfoSyncStart{ec});
-            lambda(VfoRemoved{ec});
-            lambda(VfoSyncEnd{ec});
+        handler(sptr->createEvent<VfoSyncStart>(ec));
 
-            return;
-        }
-
-        lambda(sptr->createEvent<VfoSyncStart>(ec));
-
-        lambda(sptr->createEvent<DemodChanged>(ec));
-        lambda(sptr->createEvent<OffsetChanged>(ec));
-        lambda(sptr->createEvent<CwOffsetChanged>(ec));
-        lambda(sptr->createEvent<FilterChanged>(ec));
-        lambda(sptr->createEvent<NoiseBlankerOnChanged>(
+        handler(sptr->createEvent<DemodChanged>(ec));
+        handler(sptr->createEvent<OffsetChanged>(ec));
+        handler(sptr->createEvent<CwOffsetChanged>(ec));
+        handler(sptr->createEvent<FilterChanged>(ec));
+        handler(sptr->createEvent<NoiseBlankerOnChanged>(
             ec, 1, sptr->isNoiseBlanker1On()));
-        lambda(sptr->createEvent<NoiseBlankerOnChanged>(
+        handler(sptr->createEvent<NoiseBlankerOnChanged>(
             ec, 2, sptr->isNoiseBlanker2On()));
-        lambda(sptr->createEvent<NoiseBlankerThresholdChanged>(
+        handler(sptr->createEvent<NoiseBlankerThresholdChanged>(
             ec, 1, sptr->getNoiseBlanker1Threshold()));
-        lambda(sptr->createEvent<NoiseBlankerThresholdChanged>(
+        handler(sptr->createEvent<NoiseBlankerThresholdChanged>(
             ec, 2, sptr->getNoiseBlanker2Threshold()));
-        lambda(sptr->createEvent<SqlLevelChanged>(ec));
-        lambda(sptr->createEvent<SqlAlphaChanged>(ec));
-        lambda(sptr->createEvent<AgcOnChanged>(ec));
-        lambda(sptr->createEvent<AgcHangChanged>(ec));
-        lambda(sptr->createEvent<AgcThresholdChanged>(ec));
-        lambda(sptr->createEvent<AgcSlopeChanged>(ec));
-        lambda(sptr->createEvent<AgcDecayChanged>(ec));
-        lambda(sptr->createEvent<AgcManualGainChanged>(ec));
-        lambda(sptr->createEvent<FmMaxDevChanged>(ec));
-        lambda(sptr->createEvent<FmDeemphChanged>(ec));
-        lambda(sptr->createEvent<AmDcrChanged>(ec));
-        lambda(sptr->createEvent<AmSyncDcrChanged>(ec));
-        lambda(sptr->createEvent<AmSyncPllBwChanged>(ec));
+        handler(sptr->createEvent<SqlLevelChanged>(ec));
+        handler(sptr->createEvent<SqlAlphaChanged>(ec));
+        handler(sptr->createEvent<AgcOnChanged>(ec));
+        handler(sptr->createEvent<AgcHangChanged>(ec));
+        handler(sptr->createEvent<AgcThresholdChanged>(ec));
+        handler(sptr->createEvent<AgcSlopeChanged>(ec));
+        handler(sptr->createEvent<AgcDecayChanged>(ec));
+        handler(sptr->createEvent<AgcManualGainChanged>(ec));
+        handler(sptr->createEvent<FmMaxDevChanged>(ec));
+        handler(sptr->createEvent<FmDeemphChanged>(ec));
+        handler(sptr->createEvent<AmDcrChanged>(ec));
+        handler(sptr->createEvent<AmSyncDcrChanged>(ec));
+        handler(sptr->createEvent<AmSyncPllBwChanged>(ec));
         if (sptr->isAudioRecording()) {
-            lambda(sptr->createEvent<RecordingStarted>(ec));
+            handler(sptr->createEvent<RecordingStarted>(ec));
         }
         if (sptr->isSniffing()) {
-            lambda(sptr->createEvent<SnifferStarted>(ec));
+            handler(sptr->createEvent<SnifferStarted>(ec));
         }
         if (sptr->isUdpStreaming()) {
-            lambda(sptr->createEvent<UdpStreamingStarted>(ec));
+            handler(sptr->createEvent<UdpStreamingStarted>(ec));
         }
         if (sptr->isRdsDecoderActive()) {
-            lambda(sptr->createEvent<RdsDecoderStarted>(ec));
+            handler(sptr->createEvent<RdsDecoderStarted>(ec));
         }
-        lambda(sptr->createEvent<AudioGainChanged>(ec));
+        handler(sptr->createEvent<AudioGainChanged>(ec));
 
-        lambda(sptr->createEvent<VfoSyncEnd>(ec));
+        handler(sptr->createEvent<VfoSyncEnd>(ec));
     });
-
-    return result;
 }
 
 void AsyncVfo::unsubscribe(const Connection& c) { c.disconnect(); }
 
-} // namespace core
+} // namespace violetrx

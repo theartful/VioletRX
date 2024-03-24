@@ -15,7 +15,7 @@ class VfoOpt;
 }
 
 // not really in love with this
-namespace core
+namespace violetrx
 {
 struct Filter;
 }
@@ -36,7 +36,7 @@ public:
 private:
     unsigned int filterIdxFromLoHi(int lo, int hi) const;
 
-    core::Filter getFilter(int filterIndex, int filterShapeIndex);
+    violetrx::Filter getFilter(int filterIndex, int filterShapeIndex);
     void setAgcPreset(int);
 
 private Q_SLOTS:

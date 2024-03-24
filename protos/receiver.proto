@@ -24,6 +24,7 @@ enum ErrorCode {
     RDS_ALREADY_ACTIVE = 17;
     RDS_ALREADY_INACTIVE = 18;
     INVALID_NOISE_BLANKER_ID = 19;
+    CALL_ERROR = 20;
     UNKNOWN_ERROR = 99999;
 }
 
@@ -208,8 +209,8 @@ message RdsParserReset { uint64 handle = 1; }
 message FftFrame
 {
     google.protobuf.Timestamp timestamp = 1;
-    double center_freq = 2;
-    double sample_rate = 3;
+    uint64 center_freq = 2;
+    uint32 sample_rate = 3;
     repeated float data = 4 [packed = true];
 }
 
@@ -287,6 +288,12 @@ message UInt64Response
     uint64 value = 2;
 }
 
+message UInt32Response
+{
+    ErrorCode code = 1;
+    uint32 value = 2;
+}
+
 message SetGainRequest
 {
     string name = 1;
@@ -298,7 +305,7 @@ message SetFftWindowRequest { WindowType window_type = 1; }
 message FftFrameResponse
 {
     ErrorCode code = 1;
-    FftFrame fft_frame = 2;
+    optional FftFrame fft_frame = 2;
 }
 
 message VfoUInt64Request
@@ -331,7 +338,13 @@ message VfoInt32Request
     bool value = 2;
 }
 
-message VfoRequest { uint64 handle = 1; }
+message VfoHandle { uint64 handle = 1; }
+
+message VfoResponse
+{
+    ErrorCode code = 1;
+    uint64 handle = 2;
+}
 
 message VfoFilterRequest
 {
@@ -374,12 +387,17 @@ message VfoSnifferRequest
     uint32 buffsize = 3;
 }
 
-message SnifferData { repeated float data = 1 [packed = true]; }
-
-message RdsData
+message SnifferDataResponse
 {
-    string data = 1;
-    int32 type = 2;
+    ErrorCode code = 1;
+    repeated float data = 2 [packed = true];
+}
+
+message RdsDataResponse
+{
+    ErrorCode code = 1;
+    string data = 2;
+    int32 type = 3;
 }
 
 service Rx
@@ -389,8 +407,8 @@ service Rx
     rpc Stop(google.protobuf.Empty) returns(EmptyResponse);
     rpc SetInputDevice(google.protobuf.StringValue) returns(EmptyResponse);
     rpc SetAntenna(google.protobuf.StringValue) returns(EmptyResponse);
-    rpc SetInputRate(google.protobuf.UInt32Value) returns(EmptyResponse);
-    rpc SetInputDecim(google.protobuf.UInt32Value) returns(EmptyResponse);
+    rpc SetInputRate(google.protobuf.UInt32Value) returns(UInt32Response);
+    rpc SetInputDecim(google.protobuf.UInt32Value) returns(UInt32Response);
     rpc SetIqSwap(google.protobuf.BoolValue) returns(EmptyResponse);
     rpc SetDcCancel(google.protobuf.BoolValue) returns(EmptyResponse);
     rpc SetIqBalance(google.protobuf.BoolValue) returns(EmptyResponse);
@@ -401,12 +419,14 @@ service Rx
     rpc SetFftSize(google.protobuf.UInt32Value) returns(EmptyResponse);
     rpc SetFftWindow(SetFftWindowRequest) returns(EmptyResponse);
     rpc GetFftData(google.protobuf.Empty) returns(FftFrameResponse);
+    rpc AddVfoChannel(google.protobuf.Empty) returns(VfoResponse);
+    rpc RemoveVfoChannel(VfoHandle) returns(EmptyResponse);
 
     rpc SetFilterOffset(VfoUInt64Request) returns(EmptyResponse);
     rpc SetFilter(VfoFilterRequest) returns(EmptyResponse);
     rpc SetCwOffset(VfoUInt64Request) returns(EmptyResponse);
     rpc SetDemod(VfoDemodRequest) returns(EmptyResponse);
-    rpc GetSignalPwr(VfoRequest) returns(FloatResponse);
+    rpc GetSignalPwr(VfoHandle) returns(FloatResponse);
     rpc SetNoiseBlanker(VfoNoiseBlankerRequest) returns(EmptyResponse);
     rpc SetNoiseBlankerThreshold(VfoNoiseBlankerThresholdRequest)
         returns(EmptyResponse);
@@ -424,12 +444,12 @@ service Rx
     rpc SetAmSyncDcr(VfoBoolRequest) returns(EmptyResponse);
     rpc SetAmSyncPllBw(VfoFloatRequest) returns(EmptyResponse);
     rpc StartAudioRecording(VfoRecordingRequest) returns(EmptyResponse);
-    rpc StopAudioRecording(VfoRequest) returns(EmptyResponse);
+    rpc StopAudioRecording(VfoHandle) returns(EmptyResponse);
     rpc StartSniffer(VfoSnifferRequest) returns(EmptyResponse);
-    rpc StopSniffer(VfoRequest) returns(EmptyResponse);
-    rpc GetSnifferData(VfoRequest) returns(SnifferData);
-    rpc StartRdsDecoder(VfoRequest) returns(EmptyResponse);
-    rpc StopRdsDecoder(VfoRequest) returns(EmptyResponse);
-    rpc ResetRdsParser(VfoRequest) returns(EmptyResponse);
-    rpc GetRdsData(VfoRequest) returns(RdsData);
+    rpc StopSniffer(VfoHandle) returns(EmptyResponse);
+    rpc GetSnifferData(VfoHandle) returns(SnifferDataResponse);
+    rpc StartRdsDecoder(VfoHandle) returns(EmptyResponse);
+    rpc StopRdsDecoder(VfoHandle) returns(EmptyResponse);
+    rpc ResetRdsParser(VfoHandle) returns(EmptyResponse);
+    rpc GetRdsData(VfoHandle) returns(RdsDataResponse);
 }

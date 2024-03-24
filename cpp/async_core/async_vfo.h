@@ -4,7 +4,7 @@
 #include "async_core/async_vfo_iface.h"
 #include "core/vfo_channel.h"
 
-namespace core
+namespace violetrx
 {
 class WorkerThread;
 class AsyncReceiver;
@@ -21,7 +21,7 @@ public:
     AsyncVfo(vfo_channel::sptr, std::shared_ptr<WorkerThread>);
     ~AsyncVfo() override;
 
-    Connection subscribe(VfoSubCallback) override;
+    void subscribe(VfoEventHandler, Callback<Connection>) override;
     void unsubscribe(const Connection&) override;
 
     /* filter */
@@ -172,6 +172,6 @@ private:
 
     bool m_removed;
 };
-} // namespace core
+} // namespace violetrx
 
 #endif

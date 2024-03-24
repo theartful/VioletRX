@@ -1,13 +1,5 @@
-find_package(Protobuf REQUIRED GLOBAL)
-find_package(gRPC REQUIRED GLOBAL)
-
-include(FetchContent)
-FetchContent_Declare(
-  broadcast_queue
-  GIT_REPOSITORY    https://github.com/theartful/broadcast_queue
-  GIT_TAG           master
-)
-FetchContent_MakeAvailable(broadcast_queue)
+find_package(Protobuf CONFIG REQUIRED GLOBAL)
+find_package(gRPC CONFIG REQUIRED GLOBAL)
 
 set(protos_path "${CMAKE_SOURCE_DIR}/protos")
 set(protos_out_path "${CMAKE_CURRENT_BINARY_DIR}")
@@ -62,21 +54,39 @@ PUBLIC
 )
 
 add_library(
+grpc_client
+    client.h
+    client.cpp
+    client_call.h
+)
+
+target_link_libraries(
+grpc_client
+PUBLIC
+    protos
+    async_core_iface
+    broadcast_queue
+    spdlog::spdlog
+)
+
+add_library(
 grpc_server
     server.h
     server.cpp
-    transactions_poster.h
-    transactions_poster.cpp
 )
 
 target_link_libraries(
 grpc_server
-PRIVATE
-    protos
-    broadcast_queue
 PUBLIC
-    async_core
+    protos
+    async_core_iface
+    spdlog::spdlog
 )
 
-add_executable(headless_server main.cpp)
-target_link_libraries(headless_server grpc_server)
+find_package(gflags REQUIRED)
+
+add_executable(headless_server headless_server.cpp)
+target_link_libraries(headless_server grpc_server async_core gflags)
+
+add_executable(client_test client_test.cpp)
+target_link_libraries(client_test grpc_client gflags)

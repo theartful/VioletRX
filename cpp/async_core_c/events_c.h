@@ -350,8 +350,8 @@ typedef struct {
     float gain;
 } VioletAudioGainChanged;
 
-typedef void (*VioletEventCallback)(const VioletEventCommon*, void*);
-typedef void (*VioletVfoEventCallback)(const VioletVfoEventCommon*, void*);
+typedef void (*VioletEventHandler)(const VioletEventCommon*, void*);
+typedef void (*VioletVfoEventHandler)(const VioletVfoEventCommon*, void*);
 
 #ifdef __cplusplus
 }

@@ -13,4 +13,4 @@ set(SOURCE_DIRECTORY "${PROJECT_SOURCE_DIR}/cpp")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/Modules")
 
 add_subdirectory(cpp)
-add_subdirectory(rust)
+# add_subdirectory(rust)

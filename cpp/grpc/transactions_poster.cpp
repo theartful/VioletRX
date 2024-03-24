@@ -8,7 +8,7 @@ namespace server
 {
 static constexpr size_t QUEUE_SIZE = 128;
 
-TransactionsPoster::TransactionsPoster(core::AsyncReceiverIface::sptr rx) :
+TransactionsPoster::TransactionsPoster(violetrx::AsyncReceiverIface::sptr rx) :
     tx_sender{QUEUE_SIZE}, rx{rx}
 {
 }

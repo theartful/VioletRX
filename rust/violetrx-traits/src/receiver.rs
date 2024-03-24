@@ -1,5 +1,10 @@
-use crate::error::VioletResult;
+use crate::{
+    common::{FftFrame, Timestamp},
+    error::VioletResult,
+    vfo::AsyncVfo,
+};
 use num_derive::FromPrimitive;
+use std::sync::Arc;
 
 #[derive(Debug, FromPrimitive, Clone, Copy)]
 pub enum WindowType {
@@ -30,12 +35,6 @@ pub struct GainStage {
     pub value: f64,
 }
 
-#[derive(Default, Debug, Copy, Clone)]
-pub struct Timestamp {
-    pub seconds: u64,
-    pub nanos: u32,
-}
-
 #[derive(Clone, Debug)]
 pub enum ReceiverEventData {
     Unsubscribed,
@@ -58,8 +57,8 @@ pub enum ReceiverEventData {
     FreqCorrChanged(f64),
     FftSizeChanged(i32),
     FftWindowChanged(WindowType),
-    VfoAdded,   // TODO
-    VfoRemoved, // TODO
+    VfoAdded(Arc<dyn AsyncVfo>),
+    VfoRemoved(Arc<dyn AsyncVfo>),
     Unknown,
 }
 
@@ -70,31 +69,10 @@ pub struct ReceiverEvent {
     pub data: ReceiverEventData,
 }
 
-#[derive(Default, Clone)]
-pub struct FftFrame {
-    pub data: Vec<f32>,
-    pub timestamp: Timestamp,
-    pub freq: i64,
-    pub sample_rate: i32,
-}
-
-impl std::fmt::Debug for FftFrame {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "FftFrame {{ data: [f32; {}], timestamp: {:?}, freq: {}, sample_rate: {} }}",
-            self.data.len(),
-            self.timestamp,
-            self.freq,
-            self.sample_rate
-        )
-    }
-}
-
 #[async_trait::async_trait]
 pub trait AsyncReceiver {
     fn new() -> Self;
-    async fn subscribe(&self) -> VioletResult<()>;
+
     async fn start(&self) -> VioletResult<()>;
     async fn stop(&self) -> VioletResult<()>;
     async fn set_input_dev(&self, dev: &str) -> VioletResult<()>;
@@ -111,6 +89,8 @@ pub trait AsyncReceiver {
     async fn set_fft_size(&self, fftsize: i32) -> VioletResult<()>;
     async fn set_fft_window(&self, window: WindowType) -> VioletResult<()>;
     async fn get_fft_data(&self, frame: &mut FftFrame) -> VioletResult<()>;
+    async fn add_vfo(&self) -> VioletResult<Arc<dyn AsyncVfo>>;
+    async fn remove_vfo(&self, vfo: Arc<dyn AsyncVfo>) -> VioletResult<()>;
 
     fn connect(&self) -> Box<dyn futures::stream::Stream<Item = ReceiverEvent> + Send>;
 }

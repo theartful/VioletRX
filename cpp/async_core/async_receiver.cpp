@@ -11,7 +11,7 @@
 #include <utility>
 #include <variant>
 
-namespace core
+namespace violetrx
 {
 
 int64_t EventCommon::last_id = 0;
@@ -182,7 +182,7 @@ AsyncReceiver::AsyncReceiver()
 
 AsyncReceiver::~AsyncReceiver()
 {
-    spdlog::info("AsyncReceiver::~AsyncReceiver");
+    spdlog::debug("AsyncReceiver::~AsyncReceiver");
 }
 
 template <typename Function>
@@ -201,6 +201,8 @@ void AsyncReceiver::start(Callback<> callback)
             rx->start();
             CALLBACK_ON_SUCCESS();
             stateChanged<Started>();
+        } else {
+            CALLBACK_ON_SUCCESS();
         }
     });
 }
@@ -214,6 +216,8 @@ void AsyncReceiver::stop(Callback<> callback)
             rx->stop();
             CALLBACK_ON_SUCCESS();
             stateChanged<Stopped>();
+        } else {
+            CALLBACK_ON_SUCCESS();
         }
     });
 }
@@ -250,6 +254,7 @@ void AsyncReceiver::setAntenna(std::string antenna, Callback<> callback)
         std::string old_antenna = rx->get_antenna();
 
         if (antenna == old_antenna) {
+            CALLBACK_ON_SUCCESS();
             return;
         }
 
@@ -543,6 +548,26 @@ void AsyncReceiver::addVfoChannel(Callback<AsyncVfoIfaceSptr> callback)
         stateChanged<VfoAdded>(asyncVfo->getId());
     });
 }
+
+void AsyncReceiver::removeVfoChannelImpl(AsyncVfo::sptr vfo,
+                                         Callback<> callback)
+{
+    auto it = std::find(vfos.begin(), vfos.end(), vfo);
+    if (it == vfos.end()) {
+        CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+        return;
+    }
+
+    rx->remove_vfo_channel(vfo->inner());
+
+    vfo->prepareToDie();
+    CALLBACK_ON_SUCCESS();
+
+    stateChanged<VfoRemoved>(vfo->getId());
+
+    vfos.erase(it);
+}
+
 void AsyncReceiver::removeVfoChannel(AsyncVfoIfaceSptr vfoIface,
                                      Callback<> callback)
 {
@@ -551,87 +576,74 @@ void AsyncReceiver::removeVfoChannel(AsyncVfoIfaceSptr vfoIface,
     schedule([this, vfoIface, callback = std::move(callback)]() mutable {
         auto vfo = std::dynamic_pointer_cast<AsyncVfo>(vfoIface);
 
-        auto it = std::find(vfos.begin(), vfos.end(), vfo);
-        if (it == vfos.end()) {
+        if (!vfo) {
             CALLBACK_ON_ERROR(VFO_NOT_FOUND);
             return;
         }
 
-        rx->remove_vfo_channel(vfo->inner());
-
-        vfo->prepareToDie();
-        CALLBACK_ON_SUCCESS();
-
-        stateChanged<VfoRemoved>(vfo->getId());
-
-        vfos.erase(it);
+        removeVfoChannelImpl(vfo, std::move(callback));
     });
 }
 
-Connection AsyncReceiver::subscribe(ReceiverSubCallback callback)
+void AsyncReceiver::removeVfoChannel(uint64_t handle, Callback<> callback)
 {
-    // TODO: Find a better way to do this
-    struct State {
-        bool syncstart_sent;
-        ReceiverSubCallback callback;
-    };
+    RETURN_IF_WORKER_BUSY();
 
-    std::shared_ptr<State> state =
-        std::make_shared<State>(State{false, std::move(callback)});
+    schedule([this, handle, callback = std::move(callback)]() mutable {
+        auto vfo = std::dynamic_pointer_cast<AsyncVfo>(getVfo(handle));
 
-    auto lambda = [state](ReceiverEvent event) mutable {
-        if (std::holds_alternative<SyncStart>(event)) {
-            state->callback(event);
-            state->syncstart_sent = true;
-        } else if (state->syncstart_sent) {
-            state->callback(event);
-        } else {
-            // we didn't receiver SyncStart yet, so we ignore these events
-            // until we synchronize first
+        if (!vfo) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
         }
-    };
 
-    Connection result = signalStateChanged.connect(lambda);
+        removeVfoChannelImpl(vfo, std::move(callback));
+    });
+}
 
-    schedule([this, lambda]() mutable {
+void AsyncReceiver::subscribe(ReceiverEventHandler handler,
+                              Callback<Connection> callback)
+{
+    schedule([this, handler = std::move(handler),
+              callback = std::move(callback)]() mutable {
+        callback(violetrx::ErrorCode::OK, signalStateChanged.connect(handler));
+
         EventCommon ec;
         ec.id = -1;
         ec.timestamp = {};
 
-        lambda(createEvent<SyncStart>(ec));
-        lambda(createEvent<InputDeviceChanged>(ec));
-        lambda(createEvent<AntennasChanged>(ec));
-        lambda(createEvent<AntennaChanged>(ec));
-        lambda(createEvent<InputRateChanged>(ec));
-        lambda(createEvent<InputDecimChanged>(ec));
-        lambda(createEvent<DcCancelChanged>(ec));
-        lambda(createEvent<IqBalanceChanged>(ec));
-        lambda(createEvent<IqSwapChanged>(ec));
-        lambda(createEvent<RfFreqChanged>(ec));
-        lambda(createEvent<GainStagesChanged>(ec));
-        lambda(createEvent<AutoGainChanged>(ec));
-        lambda(createEvent<FreqCorrChanged>(ec));
-        lambda(createEvent<FftSizeChanged>(ec));
-        lambda(createEvent<FftWindowChanged>(ec));
+        handler(createEvent<SyncStart>(ec));
+        handler(createEvent<InputDeviceChanged>(ec));
+        handler(createEvent<AntennasChanged>(ec));
+        handler(createEvent<AntennaChanged>(ec));
+        handler(createEvent<InputRateChanged>(ec));
+        handler(createEvent<InputDecimChanged>(ec));
+        handler(createEvent<DcCancelChanged>(ec));
+        handler(createEvent<IqBalanceChanged>(ec));
+        handler(createEvent<IqSwapChanged>(ec));
+        handler(createEvent<RfFreqChanged>(ec));
+        handler(createEvent<GainStagesChanged>(ec));
+        handler(createEvent<AutoGainChanged>(ec));
+        handler(createEvent<FreqCorrChanged>(ec));
+        handler(createEvent<FftSizeChanged>(ec));
+        handler(createEvent<FftWindowChanged>(ec));
 
         if (rx->is_running()) {
-            lambda(createEvent<Started>(ec));
+            handler(createEvent<Started>(ec));
         } else {
-            lambda(createEvent<Stopped>(ec));
+            handler(createEvent<Stopped>(ec));
         }
 
         if (rx->is_iq_recording()) {
-            lambda(createEvent<IqRecordingStarted>(ec));
+            handler(createEvent<IqRecordingStarted>(ec));
         }
 
         for (auto& vfo : vfos) {
             stateChanged<VfoAdded>(vfo->getId());
         }
 
-        lambda(createEvent<SyncEnd>(ec));
+        handler(createEvent<SyncEnd>(ec));
     });
-
-    return result;
 }
 
 void AsyncReceiver::unsubscribe(const Connection& c) { c.disconnect(); }
@@ -715,4 +727,4 @@ std::string AsyncReceiver::iqRecordingPath() const
     return rx->get_iq_filename();
 }
 
-} // namespace core
+} // namespace violetrx

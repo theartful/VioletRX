@@ -11,7 +11,7 @@
 #include <boost/signals2.hpp>
 #include <function2/function2.hpp>
 
-namespace core
+namespace violetrx
 {
 
 class AsyncReceiverIface
@@ -23,7 +23,7 @@ public:
 public:
     virtual ~AsyncReceiverIface() {}
 
-    virtual Connection subscribe(ReceiverSubCallback) = 0;
+    virtual void subscribe(ReceiverEventHandler, Callback<Connection>) = 0;
     virtual void unsubscribe(const Connection&) = 0;
 
     virtual void start(Callback<> = {}) = 0;
@@ -54,6 +54,27 @@ public:
     /* VFO channels */
     virtual void addVfoChannel(Callback<AsyncVfoIfaceSptr> = {}) = 0;
     virtual void removeVfoChannel(AsyncVfoIfaceSptr, Callback<> = {}) = 0;
+    virtual void removeVfoChannel(uint64_t, Callback<> = {}) = 0;
+
+    template <typename Lambda>
+    void getVfo(uint64_t handle, Lambda callback)
+    {
+        synchronize(
+            [this, handle, callback = std::move(callback)](ErrorCode err) {
+                if (err != ErrorCode::OK) {
+                    callback(err, nullptr);
+                    return;
+                }
+
+                auto vfo = getVfo(handle);
+                if (!vfo) {
+                    callback(ErrorCode::VFO_NOT_FOUND, nullptr);
+                    return;
+                }
+
+                callback(ErrorCode::OK, vfo);
+            });
+    }
 
     /* Sync API: getters can only be called inside a successful callback
      * function */
@@ -82,6 +103,6 @@ protected:
     Signal<void(const ReceiverEvent&)> signalStateChanged;
 };
 
-} // namespace core
+} // namespace violetrx
 
 #endif // ASYNC_RECEIVER_IFACE_H

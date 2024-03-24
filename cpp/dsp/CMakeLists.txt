@@ -54,8 +54,6 @@ dsp
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-set_property(TARGET dsp PROPERTY CXX_STANDARD 17)
-
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PC_FFTW3F REQUIRED IMPORTED_TARGET "fftw3f")
 pkg_check_modules(PC_SNDFILE REQUIRED IMPORTED_TARGET "sndfile")

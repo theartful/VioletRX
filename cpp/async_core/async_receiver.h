@@ -2,15 +2,15 @@
 #define ASYNC_RECEIVER_H
 
 #include <memory>
+
 #include <source_location>
 
 #include "async_core/async_receiver_iface.h"
 #include "async_core/events.h"
 #include "core/receiver.h"
 
-namespace core
+namespace violetrx
 {
-
 class WorkerThread;
 
 class AsyncVfo;
@@ -22,7 +22,7 @@ public:
     AsyncReceiver();
     ~AsyncReceiver() override;
 
-    Connection subscribe(ReceiverSubCallback) override;
+    void subscribe(ReceiverEventHandler, Callback<Connection>) override;
     void unsubscribe(const Connection&) override;
 
     void start(Callback<> = {}) override;
@@ -53,8 +53,9 @@ public:
     /* VFO channels */
     void addVfoChannel(Callback<AsyncVfoIfaceSptr> = {}) override;
     void removeVfoChannel(AsyncVfoIfaceSptr, Callback<> = {}) override;
+    void removeVfoChannel(uint64_t, Callback<> = {}) override;
 
-    /* Sync API: getters can only be called inside a successful callback
+    /* Sync API: getters can only be called inside a successful synchronize
      * function */
     void synchronize(Callback<>) override;
     bool isRunning() const override;
@@ -88,12 +89,14 @@ private:
     template <typename Event, typename... Args>
     void stateChanged(Args... args);
 
+    void removeVfoChannelImpl(std::shared_ptr<AsyncVfo>, Callback<>);
+
 private:
     receiver::sptr rx;
     std::vector<std::shared_ptr<AsyncVfo>> vfos;
     std::shared_ptr<WorkerThread> workerThread;
 };
 
-} // namespace core
+} // namespace violetrx
 
 #endif

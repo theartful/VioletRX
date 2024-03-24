@@ -1,11 +1,13 @@
 #include "error_codes.h"
 
-namespace core
+namespace violetrx
 {
 
 const char* errorMsg(ErrorCode code)
 {
     switch (code) {
+    case OK:
+        return "OK";
     case WORKER_BUSY:
         return "Worker busy";
     case GAIN_NOT_FOUND:
@@ -42,10 +44,12 @@ const char* errorMsg(ErrorCode code)
         return "Rds already active";
     case RDS_ALREADY_INACTIVE:
         return "Rds already inactive";
+    case CALL_ERROR:
+        return "Function call error";
     case UNKNOWN_ERROR:
     default:
         return "Unknown error";
     }
 }
 
-} // namespace core
+} // namespace violetrx

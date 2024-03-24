@@ -16,8 +16,8 @@
 #include "receiver_model.h"
 
 #define DEFAULT_VOID_CALLBACK                                                  \
-    [promise = std::move(promise)](core::ErrorCode code) mutable {             \
-        if (code == core::ErrorCode::OK) {                                     \
+    [promise = std::move(promise)](violetrx::ErrorCode code) mutable {         \
+        if (code == violetrx::ErrorCode::OK) {                                 \
             promise.start();                                                   \
             promise.finish();                                                  \
         } else {                                                               \
@@ -28,8 +28,9 @@
     }
 
 #define DEFAULT_ARG_CALLBACK                                                   \
-    [promise = std::move(promise)](core::ErrorCode code, auto arg) mutable {   \
-        if (code == core::ErrorCode::OK) {                                     \
+    [promise = std::move(promise)](violetrx::ErrorCode code,                   \
+                                   auto arg) mutable {                         \
+        if (code == violetrx::ErrorCode::OK) {                                 \
             promise.start();                                                   \
             promise.addResult(std::move(arg));                                 \
             promise.finish();                                                  \
@@ -41,11 +42,11 @@
     }
 
 ReceiverModel::ReceiverModel(QObject* parent) :
-    ReceiverModel(core::AsyncReceiver::make(), parent)
+    ReceiverModel(violetrx::AsyncReceiver::make(), parent)
 {
 }
 
-ReceiverModel::ReceiverModel(core::AsyncReceiverIface::sptr rx_,
+ReceiverModel::ReceiverModel(violetrx::AsyncReceiverIface::sptr rx_,
                              QObject* parent) :
     QObject(parent),
     rx(rx_),
@@ -61,16 +62,25 @@ ReceiverModel::ReceiverModel(core::AsyncReceiverIface::sptr rx_,
 
 ReceiverModel::~ReceiverModel() {}
 
-static inline std::exception_ptr makeException(core::ErrorCode error)
+static inline std::exception_ptr makeException(violetrx::ErrorCode error)
 {
-    return std::make_exception_ptr(std::runtime_error(core::errorMsg(error)));
+    return std::make_exception_ptr(
+        std::runtime_error(violetrx::errorMsg(error)));
 }
 
 void ReceiverModel::subscribe()
 {
-    conStateChanged = rx->subscribe([this](const core::ReceiverEvent& e) {
-        onStateChanged((const void*)(&e));
-    });
+    rx->subscribe(
+        [this](const violetrx::ReceiverEvent& e) {
+            onStateChanged(static_cast<const void*>(&e));
+        },
+        [this](violetrx::ErrorCode err, violetrx::Connection connection) {
+            if (err == violetrx::ErrorCode::OK) {
+                conStateChanged = std::move(connection);
+            } else {
+                // TODO
+            }
+        });
 }
 
 void ReceiverModel::unsubscribe() { rx->unsubscribe(conStateChanged); }
@@ -83,7 +93,7 @@ void ReceiverModel::onStateChanged(const void* event_erased)
 #define INVOKE_METHOD(func)                                                    \
     QMetaObject::invokeMethod(this, [=, this]() { func; })
 
-    using namespace core;
+    using namespace violetrx;
 
     const ReceiverEvent& e = *static_cast<const ReceiverEvent*>(event_erased);
     std::visit(Visitor{
@@ -347,10 +357,10 @@ QFuture<void> ReceiverModel::getIqFftData(FftFrame* frame)
     frame->fft_points.resize(m_fftSize);
 
     auto callback = [promise = std::move(promise),
-                     frame](core::ErrorCode code, core::Timestamp timestamp,
-                            int64_t centerFreq, int sampleRate, float*,
-                            int size) mutable {
-        if (code == core::ErrorCode::OK) {
+                     frame](violetrx::ErrorCode code,
+                            violetrx::Timestamp timestamp, int64_t centerFreq,
+                            int sampleRate, float*, int size) mutable {
+        if (code == violetrx::ErrorCode::OK) {
             frame->timestamp = timestamp;
             frame->center_freq = centerFreq;
             frame->sample_rate = sampleRate;
@@ -403,9 +413,9 @@ QFuture<VFOChannelModel*> ReceiverModel::addVFOChannel()
     QFuture<VFOChannelModel*> future = promise.future();
 
     auto callback = [this, promise = std::move(promise)](
-                        core::ErrorCode code,
-                        core::AsyncVfoIfaceSptr vfo) mutable {
-        if (code == core::ErrorCode::OK) {
+                        violetrx::ErrorCode code,
+                        violetrx::AsyncVfoIfaceSptr vfo) mutable {
+        if (code == violetrx::ErrorCode::OK) {
             // we have to call addVfoIfDoesntExist in the qt gui thread
             // to avoid the need for synchronization
             QMetaObject::invokeMethod(
@@ -426,7 +436,8 @@ QFuture<VFOChannelModel*> ReceiverModel::addVFOChannel()
     return future;
 }
 
-VFOChannelModel* ReceiverModel::addVfoIfDoesntExist(core::AsyncVfoIfaceSptr vfo)
+VFOChannelModel*
+ReceiverModel::addVfoIfDoesntExist(violetrx::AsyncVfoIfaceSptr vfo)
 {
     auto it = std::find_if(vfos.begin(), vfos.end(), [&](auto& vfoModel) {
         return vfoModel->getId() == vfo->getId();
@@ -519,7 +530,7 @@ void ReceiverModel::onRfFreqChanged(int64_t freq)
     Q_EMIT centerFreqChanged(m_centerFreq);
 }
 void ReceiverModel::onGainStagesChanged(
-    std::vector<core::GainStage> gainStages_std)
+    std::vector<violetrx::GainStage> gainStages_std)
 {
     m_gainStages.clear();
     m_gainStages.resize(gainStages_std.size());
@@ -582,11 +593,11 @@ void ReceiverModel::onIqRecordingStarted(std::string filename)
 }
 void ReceiverModel::onIqRecordingStopped() { Q_EMIT iqRecordingStopped(); }
 
-void ReceiverModel::onVfoAdded(core::AsyncVfoIfaceSptr vfo)
+void ReceiverModel::onVfoAdded(violetrx::AsyncVfoIfaceSptr vfo)
 {
     addVfoIfDoesntExist(vfo);
 }
-void ReceiverModel::onVfoRemoved(core::AsyncVfoIfaceSptr vfo)
+void ReceiverModel::onVfoRemoved(violetrx::AsyncVfoIfaceSptr vfo)
 {
     auto it = std::find_if(vfos.begin(), vfos.end(), [&](auto& vfoModel) {
         return vfoModel->getId() == vfo->getId();
@@ -673,7 +684,7 @@ void ReceiverModel::setActiveVfo(VFOChannelModel* vfo)
 VFOChannelModel* ReceiverModel::activeVfo() { return m_activeVfo; }
 
 VFOChannelModel::VFOChannelModel(ReceiverModel* parent_,
-                                 core::AsyncVfoIfaceSptr vfo_) :
+                                 violetrx::AsyncVfoIfaceSptr vfo_) :
     QObject(parent_),
     parent(parent_),
     vfo(vfo_),
@@ -705,9 +716,17 @@ VFOChannelModel::VFOChannelModel(ReceiverModel* parent_,
     m_color = color;
 
     // connections
-    conStateChanged = vfo->subscribe([this](const core::VfoEvent& e) {
-        onStateChanged(static_cast<const void*>(&e));
-    });
+    vfo->subscribe(
+        [this](const violetrx::VfoEvent& e) {
+            onStateChanged(static_cast<const void*>(&e));
+        },
+        [this](violetrx::ErrorCode err, violetrx::Connection connection) {
+            if (err == violetrx::ErrorCode::OK) {
+                conStateChanged = std::move(connection);
+            } else {
+                // TODO
+            }
+        });
 }
 
 ReceiverModel* VFOChannelModel::parentModel() const { return parent; }
@@ -1061,10 +1080,10 @@ QFuture<RdsData> VFOChannelModel::getRdsData()
     QPromise<RdsData> promise;
     QFuture<RdsData> future = promise.future();
 
-    auto callback = [promise = std::move(promise)](core::ErrorCode code,
+    auto callback = [promise = std::move(promise)](violetrx::ErrorCode code,
                                                    std::string str,
                                                    int type) mutable {
-        if (code == core::ErrorCode::OK) {
+        if (code == violetrx::ErrorCode::OK) {
             RdsData data;
             data.message = QString::fromStdString(str).trimmed();
             data.type = type;
@@ -1374,7 +1393,7 @@ void VFOChannelModel::onStateChanged(const void* event_erased)
 #define INVOKE_METHOD(func)                                                    \
     QMetaObject::invokeMethod(this, [=, this]() { func; })
 
-    using namespace core;
+    using namespace violetrx;
     const VfoEvent& e = *static_cast<const VfoEvent*>(event_erased);
 
     std::visit(

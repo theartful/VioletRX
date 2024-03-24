@@ -1,3 +1,4 @@
+use crate::common::Timestamp;
 use num_derive::FromPrimitive;
 
 #[derive(Debug, FromPrimitive)]
@@ -16,7 +17,13 @@ pub enum Demod {
     WfmStereoOirt = 11,
 }
 
-#[async_trait::async_trait]
-pub trait AsyncVfo {
+pub enum VfoEventData {}
 
+pub struct VfoEvent {
+    pub id: i64,
+    pub timestamp: Timestamp,
+    pub data: VfoEventData,
 }
+
+#[async_trait::async_trait]
+pub trait AsyncVfo: std::fmt::Debug {}

@@ -7,7 +7,7 @@
 #include "async_core/events.h"
 #include "async_core/types.h"
 
-namespace core
+namespace violetrx
 {
 
 class AsyncVfoIface : public std::enable_shared_from_this<AsyncVfoIface>
@@ -18,7 +18,7 @@ public:
 public:
     virtual ~AsyncVfoIface() {}
 
-    virtual Connection subscribe(VfoSubCallback) = 0;
+    virtual void subscribe(VfoEventHandler, Callback<Connection>) = 0;
     virtual void unsubscribe(const Connection&) = 0;
 
     /* filter */
@@ -117,5 +117,5 @@ protected:
     Signal<void(const VfoEvent&)> signalStateChanged;
 };
 
-} // namespace core
+} // namespace violetrx
 #endif

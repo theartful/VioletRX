@@ -39,7 +39,7 @@ void decrement_shared_ptr(const std::shared_ptr<T>& ptr)
 
 VioletReceiver* violet_rx_init()
 {
-    auto rx = core::AsyncReceiver::make();
+    auto rx = violetrx::AsyncReceiver::make();
 
     // the other side has to decrement the shared ptr by calling
     // violet_rx_destroy
@@ -49,30 +49,30 @@ VioletReceiver* violet_rx_init()
 
 VioletReceiver* violet_rx_new_ref(VioletReceiver* rx_erased)
 {
-    increment_shared_ptr(
-        static_cast<core::AsyncReceiverIface*>(rx_erased)->shared_from_this());
+    increment_shared_ptr(static_cast<violetrx::AsyncReceiverIface*>(rx_erased)
+                             ->shared_from_this());
 
     return rx_erased;
 }
 
 void violet_rx_destroy(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     decrement_shared_ptr(rx->shared_from_this());
 }
 
 void violet_vfo_destroy(VioletVfo* vfo_erased)
 {
-    auto vfo = static_cast<core::AsyncVfoIface*>(vfo_erased);
+    auto vfo = static_cast<violetrx::AsyncVfoIface*>(vfo_erased);
     decrement_shared_ptr(vfo->shared_from_this());
 }
 
 void violet_rx_start(VioletReceiver* rx_erased, VioletVoidCallback callback,
                      void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->start([callback, userdata](core::ErrorCode code) {
+    rx->start([callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
@@ -80,9 +80,9 @@ void violet_rx_start(VioletReceiver* rx_erased, VioletVoidCallback callback,
 void violet_rx_stop(VioletReceiver* rx_erased, VioletVoidCallback callback,
                     void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->stop([callback, userdata](core::ErrorCode code) {
+    rx->stop([callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
@@ -90,9 +90,9 @@ void violet_rx_stop(VioletReceiver* rx_erased, VioletVoidCallback callback,
 void violet_rx_set_input_dev(VioletReceiver* rx_erased, const char* dev,
                              VioletVoidCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setInputDevice(dev, [callback, userdata](core::ErrorCode code) {
+    rx->setInputDevice(dev, [callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
@@ -100,9 +100,9 @@ void violet_rx_set_input_dev(VioletReceiver* rx_erased, const char* dev,
 void violet_rx_set_antenna(VioletReceiver* rx_erased, const char* antenna,
                            VioletVoidCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setAntenna(antenna, [callback, userdata](core::ErrorCode code) {
+    rx->setAntenna(antenna, [callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
@@ -110,10 +110,10 @@ void violet_rx_set_antenna(VioletReceiver* rx_erased, const char* antenna,
 void violet_rx_set_input_rate(VioletReceiver* rx_erased, int samplerate,
                               VioletIntCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
     rx->setInputRate(samplerate,
-                     [callback, userdata](core::ErrorCode code, int rate) {
+                     [callback, userdata](violetrx::ErrorCode code, int rate) {
                          callback(code, rate, userdata);
                      });
 }
@@ -121,57 +121,58 @@ void violet_rx_set_input_rate(VioletReceiver* rx_erased, int samplerate,
 void violet_rx_set_input_decim(VioletReceiver* rx_erased, int decim,
                                VioletIntCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setInputDecim(decim,
-                      [callback, userdata](core::ErrorCode code, int decim) {
-                          callback(code, decim, userdata);
-                      });
+    rx->setInputDecim(
+        decim, [callback, userdata](violetrx::ErrorCode code, int decim) {
+            callback(code, decim, userdata);
+        });
 }
 
 void violet_rx_set_rf_freq(VioletReceiver* rx_erased, int64_t freq,
                            VioletInt64Callback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setRfFreq(freq, [callback, userdata](core::ErrorCode code, int freq) {
-        callback(code, freq, userdata);
-    });
+    rx->setRfFreq(freq,
+                  [callback, userdata](violetrx::ErrorCode code, int freq) {
+                      callback(code, freq, userdata);
+                  });
 }
 
 void violet_rx_set_iq_swap(VioletReceiver* rx_erased, bool enable,
                            VioletVoidCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setIqSwap(enable, [callback, userdata](core::ErrorCode code) {
+    rx->setIqSwap(enable, [callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
 void violet_rx_set_dc_cancel(VioletReceiver* rx_erased, bool enable,
                              VioletVoidCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setDcCancel(enable, [callback, userdata](core::ErrorCode code) {
+    rx->setDcCancel(enable, [callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
 void violet_rx_set_iq_balance(VioletReceiver* rx_erased, bool enable,
                               VioletVoidCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setIqBalance(enable, [callback, userdata](core::ErrorCode code) {
+    rx->setIqBalance(enable, [callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
 void violet_rx_set_auto_gain(VioletReceiver* rx_erased, bool enable,
                              VioletVoidCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setAutoGain(enable, [callback, userdata](core::ErrorCode code) {
+    rx->setAutoGain(enable, [callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
@@ -179,29 +180,29 @@ void violet_rx_set_gain(VioletReceiver* rx_erased, const char* gain_name,
                         double value, VioletDoubleCallback callback,
                         void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
     rx->setGain(gain_name, value,
-                [callback, userdata](core::ErrorCode code, double gain) {
+                [callback, userdata](violetrx::ErrorCode code, double gain) {
                     callback(code, gain, userdata);
                 });
 }
 void violet_rx_set_freq_corr(VioletReceiver* rx_erased, double ppm,
                              VioletDoubleCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
     rx->setFreqCorr(ppm,
-                    [callback, userdata](core::ErrorCode code, double ppm) {
+                    [callback, userdata](violetrx::ErrorCode code, double ppm) {
                         callback(code, ppm, userdata);
                     });
 }
 void violet_rx_set_fft_size(VioletReceiver* rx_erased, int fftsize,
                             VioletVoidCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setIqFftSize(fftsize, [callback, userdata](core::ErrorCode code) {
+    rx->setIqFftSize(fftsize, [callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
@@ -209,22 +210,23 @@ void violet_rx_set_fft_window(VioletReceiver* rx_erased,
                               VioletWindowType window, bool normalize_energy,
                               VioletVoidCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->setIqFftWindow((core::WindowType)window, normalize_energy,
-                       [callback, userdata](core::ErrorCode code) {
+    rx->setIqFftWindow((violetrx::WindowType)window, normalize_energy,
+                       [callback, userdata](violetrx::ErrorCode code) {
                            callback(code, userdata);
                        });
 }
 void violet_rx_get_fft_data(VioletReceiver* rx_erased, float* data, int size,
                             VioletFftDataCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
     rx->getIqFftData(data, size,
-                     [callback, userdata](
-                         core::ErrorCode code, core::Timestamp timestamp,
-                         int64_t freq, int samplerate, float* data, int size) {
+                     [callback, userdata](violetrx::ErrorCode code,
+                                          violetrx::Timestamp timestamp,
+                                          int64_t freq, int samplerate,
+                                          float* data, int size) {
                          callback(code,
                                   VioletTimestamp{
                                       timestamp.seconds,
@@ -237,10 +239,10 @@ void violet_rx_get_fft_data(VioletReceiver* rx_erased, float* data, int size,
 void violet_rx_add_vfo(VioletReceiver* rx_erased, VioletVfoCallback callback,
                        void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->addVfoChannel([callback, userdata](core::ErrorCode code,
-                                           core::AsyncVfoIfaceSptr vfo) {
+    rx->addVfoChannel([callback, userdata](violetrx::ErrorCode code,
+                                           violetrx::AsyncVfoIfaceSptr vfo) {
         // the other side has to decrement the shared ptr by calling
         // violet_vfo_destroy
         increment_shared_ptr(vfo);
@@ -251,11 +253,11 @@ void violet_rx_add_vfo(VioletReceiver* rx_erased, VioletVfoCallback callback,
 void violet_rx_remove_vfo(VioletReceiver* rx_erased, VioletVfo* vfo_erased,
                           VioletVoidCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
-    auto vfo = static_cast<core::AsyncVfoIface*>(vfo_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
+    auto vfo = static_cast<violetrx::AsyncVfoIface*>(vfo_erased);
 
     rx->removeVfoChannel(vfo->shared_from_this(),
-                         [callback, userdata](core::ErrorCode code) {
+                         [callback, userdata](violetrx::ErrorCode code) {
                              callback(code, userdata);
                          });
 }
@@ -263,65 +265,65 @@ void violet_rx_remove_vfo(VioletReceiver* rx_erased, VioletVfo* vfo_erased,
 void voilet_rx_synchronize(VioletReceiver* rx_erased,
                            VioletSyncCallback callback, void* userdata)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    rx->synchronize([callback, userdata](core::ErrorCode code) {
+    rx->synchronize([callback, userdata](violetrx::ErrorCode code) {
         callback(code, userdata);
     });
 }
 char* violet_rx_get_input_dev(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return strdup(rx->getInputDevice().c_str());
 }
 char* violet_rx_get_cur_antenna(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return strdup(rx->getAntenna().c_str());
 }
 int violet_rx_get_input_rate(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getInputRate();
 }
 int violet_rx_get_input_decim(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getInputDecim();
 }
 bool violet_rx_get_dc_cancel(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getDcCancel();
 }
 bool violet_rx_get_iq_balance(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getIqBalance();
 }
 bool violet_rx_get_iq_swap(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getIqSwap();
 }
 int64_t violet_rx_get_rf_freq(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getRfFreq();
 }
 int violet_rx_get_gain_stages_count(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     // FIXME: not very efficient
     return rx->getGainStages().size();
 }
 VioletGainStage violet_rx_get_gain_stage(VioletReceiver* rx_erased, int idx)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
     auto stages = rx->getGainStages();
     if (idx < std::ssize(stages)) {
-        core::GainStage stage = stages[idx];
+        violetrx::GainStage stage = stages[idx];
 
         return VioletGainStage{.name = strdup(stage.name.c_str()),
                                .start = stage.start,
@@ -335,12 +337,12 @@ VioletGainStage violet_rx_get_gain_stage(VioletReceiver* rx_erased, int idx)
 }
 int violet_rx_get_antennas_count(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getAntennas().size();
 }
 char* violet_rx_get_antenna(VioletReceiver* rx_erased, int idx)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     auto antennas = rx->getAntennas();
     if (idx < std::ssize(antennas))
         return strdup(antennas[idx].c_str());
@@ -349,32 +351,32 @@ char* violet_rx_get_antenna(VioletReceiver* rx_erased, int idx)
 }
 bool violet_rx_get_auto_gain(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getAutoGain();
 }
 double violet_rx_get_freq_corr(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getFreqCorr();
 }
 int violet_rx_get_fft_size(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getIqFftSize();
 }
 VioletWindowType violet_rx_get_fft_window(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return (VioletWindowType)rx->getIqFftWindow();
 }
 int violet_rx_get_vfos_count(VioletReceiver* rx_erased)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     return rx->getVfos().size();
 }
 VioletVfo* violet_rx_get_vfo(VioletReceiver* rx_erased, int idx)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
     auto vfos = rx->getVfos();
     if (idx < std::ssize(vfos)) {
         auto vfo = vfos[idx];
@@ -407,18 +409,21 @@ public:
 };
 
 // FIXME: this should be the behaviour of subscribe
-VioletConnection* violet_rx_subscribe(VioletReceiver* rx_erased,
-                                      VioletEventCallback callback,
-                                      void* userdata)
+void violet_rx_subscribe(VioletReceiver* rx_erased, VioletEventHandler handler,
+                         void* userdata, VioletConnectionCallback callback,
+                         void* userdata2)
 {
-    auto rx = static_cast<core::AsyncReceiverIface*>(rx_erased);
+    auto rx = static_cast<violetrx::AsyncReceiverIface*>(rx_erased);
 
-    Connection connection = rx->subscribe([=](const core::ReceiverEvent& ev) {
-        core::CEvent c_event{ev};
-        callback(c_event.inner(), userdata);
-    });
-
-    return connection.ptr();
+    rx->subscribe(
+        [=](const violetrx::ReceiverEvent& ev) {
+            violetrx::CEvent c_event{ev};
+            handler(c_event.inner(), userdata);
+        },
+        [=](violetrx::ErrorCode code, violetrx::Connection connection) {
+            Connection exposed_connection = connection;
+            callback(code, exposed_connection.ptr(), userdata2);
+        });
 }
 void violet_unsubscribe(VioletConnection* connection_erased)
 {

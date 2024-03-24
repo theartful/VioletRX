@@ -1234,7 +1234,7 @@ void MainWindow::onVfoAdded(VFOChannelModel* vfo)
             [vfoGi](qint64 offset) { vfoGi->setOffset(offset); });
 
     connect(vfo, &VFOChannelModel::filterChanged, this,
-            [vfoGi](qint64 low, qint64 high, core::FilterShape) {
+            [vfoGi](qint64 low, qint64 high, violetrx::FilterShape) {
                 vfoGi->setHiLowCutFrequencies(low, high);
             });
 

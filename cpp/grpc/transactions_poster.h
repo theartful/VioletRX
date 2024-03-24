@@ -16,21 +16,21 @@ struct Transaction {
 class TransactionsPoster
 {
 public:
-    TransactionsPoster(core::AsyncReceiverIface::sptr rx);
+    TransactionsPoster(violetrx::AsyncReceiverIface::sptr rx);
     broadcast_queue::receiver<Transaction> subscribe();
 
 private:
-    void onReceiverEvent(core::ReceiverEvent&);
-    void onVfoEvent(core::AsyncVfoIface::sptr, core::VfoEvent&);
+    void onReceiverEvent(violetrx::ReceiverEvent&);
+    void onVfoEvent(violetrx::AsyncVfoIface::sptr, violetrx::VfoEvent&);
 
 private:
     struct VfoData {
-        core::AsyncVfoIface::sptr vfo;
+        violetrx::AsyncVfoIface::sptr vfo;
         boost::signals2::scoped_connection connection;
     };
 
     broadcast_queue::sender<Transaction> tx_sender;
-    core::AsyncReceiverIface::sptr rx;
+    violetrx::AsyncReceiverIface::sptr rx;
     boost::signals2::scoped_connection connection;
     // std::vector<VfoData>
 };

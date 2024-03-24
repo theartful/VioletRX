@@ -89,6 +89,7 @@ typedef void (*VioletVfoCallback)(VioletError, VioletVfo*, void*);
 typedef void (*VioletFftDataCallback)(VioletError, VioletTimestamp, int64_t,
                                       int, float*, int, void*);
 typedef void (*VioletSyncCallback)(VioletError, void*);
+typedef void (*VioletConnectionCallback)(VioletError, VioletConnection*, void*);
 
 #ifdef __cplusplus
 }
