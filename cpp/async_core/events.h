@@ -2,8 +2,12 @@
 #define CORE_EVENTS
 
 #include <cstdint>
-#include <function2/function2.hpp>
+#include <optional>
+#include <string>
 #include <variant>
+#include <vector>
+
+#include <function2/function2.hpp>
 
 #include "async_core/types.h"
 
@@ -164,8 +168,8 @@ struct RecordingStarted : public VfoEventCommon {
 struct RecordingStopped : public VfoEventCommon {
 };
 struct SnifferStarted : public VfoEventCommon {
-    int sampleRate;
-    int buffSize;
+    int sample_rate;
+    int size;
 };
 struct SnifferStopped : public VfoEventCommon {
 };
@@ -213,14 +217,64 @@ using Event = std::variant<
     IqBalanceChanged, RfFreqChanged, GainStagesChanged, AntennasChanged,
     AutoGainChanged, GainChanged, FreqCorrChanged, FftSizeChanged,
     FftWindowChanged, IqRecordingStarted, IqRecordingStopped, VfoAdded,
-    VfoRemoved, AudioGainChanged, DemodChanged, OffsetChanged, CwOffsetChanged,
-    FilterChanged, NoiseBlankerOnChanged, NoiseBlankerThresholdChanged,
-    SqlLevelChanged, SqlAlphaChanged, AgcOnChanged, AgcHangChanged,
-    AgcThresholdChanged, AgcSlopeChanged, AgcDecayChanged, AgcManualGainChanged,
-    FmMaxDevChanged, FmDeemphChanged, AmDcrChanged, AmSyncDcrChanged,
-    AmSyncPllBwChanged, RecordingStarted, RecordingStopped, SnifferStarted,
-    SnifferStopped, UdpStreamingStarted, UdpStreamingStopped, RdsDecoderStarted,
-    RdsDecoderStopped, RdsParserReset>;
+    VfoRemoved, AudioGainChanged, VfoSyncStart, VfoSyncEnd, DemodChanged,
+    OffsetChanged, CwOffsetChanged, FilterChanged, NoiseBlankerOnChanged,
+    NoiseBlankerThresholdChanged, SqlLevelChanged, SqlAlphaChanged,
+    AgcOnChanged, AgcHangChanged, AgcThresholdChanged, AgcSlopeChanged,
+    AgcDecayChanged, AgcManualGainChanged, FmMaxDevChanged, FmDeemphChanged,
+    AmDcrChanged, AmSyncDcrChanged, AmSyncPllBwChanged, RecordingStarted,
+    RecordingStopped, SnifferStarted, SnifferStopped, UdpStreamingStarted,
+    UdpStreamingStopped, RdsDecoderStarted, RdsDecoderStopped, RdsParserReset>;
+
+inline constexpr bool IsReceiverEvent(const Event& event)
+{
+    return std::visit(
+        [](const auto& specific_event) {
+            using EventType = std::decay_t<decltype(specific_event)>;
+            return std::is_convertible_v<EventType, ReceiverEvent>;
+        },
+        event);
+}
+
+inline constexpr bool IsVfoEvent(const Event& event)
+{
+    return std::visit(
+        [](const auto& specific_event) {
+            using EventType = std::decay_t<decltype(specific_event)>;
+            return std::is_convertible_v<EventType, VfoEvent>;
+        },
+        event);
+}
+
+inline constexpr std::optional<ReceiverEvent> ToReceiverEvent(Event event)
+{
+    return std::visit(
+        [](const auto& specific_event) -> std::optional<ReceiverEvent> {
+            using EventType = std::decay_t<decltype(specific_event)>;
+
+            if constexpr (std::is_convertible_v<EventType, ReceiverEvent>) {
+                return ReceiverEvent(specific_event);
+            } else {
+                return {};
+            }
+        },
+        event);
+}
+
+inline constexpr std::optional<VfoEvent> ToVfoEvent(Event event)
+{
+    return std::visit(
+        [](const auto& specific_event) -> std::optional<VfoEvent> {
+            using EventType = std::decay_t<decltype(specific_event)>;
+
+            if constexpr (std::is_convertible_v<EventType, VfoEvent>) {
+                return VfoEvent(specific_event);
+            } else {
+                return {};
+            }
+        },
+        event);
+}
 
 using ReceiverEventHandler = fu2::function<void(const ReceiverEvent&)>;
 using VfoEventHandler = fu2::function<void(const VfoEvent&)>;
@@ -231,6 +285,18 @@ struct Visitor : Ts... {
 };
 template <class... Ts>
 Visitor(Ts...) -> Visitor<Ts...>;
+
+static_assert(IsReceiverEvent(Event{SyncStart{}}));
+static_assert(!IsReceiverEvent(Event{VfoSyncStart{}}));
+
+static_assert(IsVfoEvent(Event{VfoSyncStart{}}));
+static_assert(!IsVfoEvent(Event{SyncStart{}}));
+
+static_assert(!ToVfoEvent(Event{SyncStart{}}).has_value());
+static_assert(ToVfoEvent(Event{VfoSyncStart{}}).has_value());
+
+static_assert(ToReceiverEvent(Event{SyncStart{}}).has_value());
+static_assert(!ToReceiverEvent(Event{VfoSyncStart{}}).has_value());
 
 } // namespace violetrx
 

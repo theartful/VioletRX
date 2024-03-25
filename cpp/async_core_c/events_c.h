@@ -314,8 +314,8 @@ typedef struct {
 
 typedef struct {
     VioletVfoEventCommon base;
-    int32_t sampleRate;
-    int32_t buffSize;
+    int32_t sample_rate;
+    int32_t size;
 } VioletSnifferStarted;
 
 typedef struct {

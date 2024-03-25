@@ -6,7 +6,6 @@
 #include <QVariant>
 
 #include <cmath>
-#include <iostream>
 #include <optional>
 
 #include "audioplayer.h"

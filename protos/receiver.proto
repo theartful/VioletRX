@@ -198,8 +198,8 @@ message RecordingStopped { uint64 handle = 1; }
 message SnifferStarted
 {
     uint64 handle = 1;
-    uint32 samplerate = 2;
-    uint32 buffsize = 3;
+    uint32 sample_rate = 2;
+    uint32 size = 3;
 }
 message SnifferStopped { uint64 handle = 1; }
 message RdsDecoderStarted { uint64 handle = 1; }
@@ -214,7 +214,7 @@ message FftFrame
     repeated float data = 4 [packed = true];
 }
 
-message Transaction
+message Event
 {
     uint64 id = 1;
     google.protobuf.Timestamp timestamp = 2;
@@ -248,23 +248,25 @@ message Transaction
         NoiseBlankerOnChanged nb_on_changed = 28;
         NoiseBlankerThresholdChanged nb_threshold_changed = 29;
         SqlLevelChanged sql_level_changed = 30;
-        AgcOnChanged agc_on_changed = 31;
-        AgcHangChanged agc_hang_changed = 32;
-        AgcThresholdChanged agc_threshold_changed = 33;
-        AgcSlopeChanged agc_slope_changed = 34;
-        AgcDecayChanged agc_decay_changed = 35;
-        AgcManualGainChanged agc_manual_gain_changed = 36;
-        FmMaxDevChanged fm_maxdev_changed = 37;
-        FmDeemphChanged fm_deemph_changed = 38;
-        AmDcrChanged am_dcr_changed = 39;
-        AmSyncPllBwChanged am_sync_pll_bw_changed = 40;
-        RecordingStarted recording_started = 41;
-        RecordingStopped recording_stopped = 42;
-        SnifferStarted sniffer_started = 43;
-        SnifferStopped sniffer_stopped = 44;
-        RdsDecoderStarted rds_decoder_started = 45;
-        RdsDecoderStopped rds_decoder_stopped = 46;
-        RdsParserReset rds_parser_reset = 47;
+        SqlAlphaChanged sql_alpha_changed = 31;
+        AgcOnChanged agc_on_changed = 32;
+        AgcHangChanged agc_hang_changed = 33;
+        AgcThresholdChanged agc_threshold_changed = 34;
+        AgcSlopeChanged agc_slope_changed = 35;
+        AgcDecayChanged agc_decay_changed = 36;
+        AgcManualGainChanged agc_manual_gain_changed = 37;
+        FmMaxDevChanged fm_maxdev_changed = 38;
+        FmDeemphChanged fm_deemph_changed = 39;
+        AmDcrChanged am_dcr_changed = 41;
+        AmSyncDcrChanged am_sync_dcr_changed = 42;
+        AmSyncPllBwChanged am_sync_pll_bw_changed = 43;
+        RecordingStarted recording_started = 44;
+        RecordingStopped recording_stopped = 45;
+        SnifferStarted sniffer_started = 46;
+        SnifferStopped sniffer_stopped = 47;
+        RdsDecoderStarted rds_decoder_started = 48;
+        RdsDecoderStopped rds_decoder_stopped = 49;
+        RdsParserReset rds_parser_reset = 50;
     }
 }
 
@@ -402,7 +404,7 @@ message RdsDataResponse
 
 service Rx
 {
-    rpc Subscribe(google.protobuf.Empty) returns(stream Transaction);
+    rpc Subscribe(google.protobuf.Empty) returns(stream Event);
     rpc Start(google.protobuf.Empty) returns(EmptyResponse);
     rpc Stop(google.protobuf.Empty) returns(EmptyResponse);
     rpc SetInputDevice(google.protobuf.StringValue) returns(EmptyResponse);

@@ -342,7 +342,7 @@ int AudioPlayer::paStreamCallback(
             this, std::bind(&AudioPlayer::setPositionInFrames, this, pos));
     }
 
-    size_t readFrames =
+    sf_count_t readFrames =
         sf_readf_float(file, (float*)outputBuffer, framesPerBuffer);
 
     QMetaObject::invokeMethod(

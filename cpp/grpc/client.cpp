@@ -7,6 +7,7 @@
 #include <spdlog/spdlog.h>
 
 #include "client.h"
+#include "type_conversion.h"
 
 namespace violetrx
 {
@@ -15,8 +16,7 @@ namespace violetrx
     WrapCallback(                                                              \
         std::move(call),                                                       \
         [](GrpcClient* self, UniqueClientCallPtr call, grpc::Status status) {  \
-            using CallType =                                                   \
-                std::remove_cv_t<std::remove_reference_t<decltype(data)>>;     \
+            using CallType = std::decay_t<decltype(data)>;                     \
             std::invoke(function, self, std::get<CallType>(*call),             \
                         std::move(status));                                    \
         })
@@ -25,39 +25,6 @@ namespace violetrx
     if (callback) {                                                            \
         callback(__VA_ARGS__);                                                 \
     }
-
-inline ErrorCode ErrorCodeProtoToCore(Receiver::ErrorCode code)
-{
-    // FIXME
-    return static_cast<ErrorCode>(code);
-}
-
-inline Receiver::WindowType WindowTypeCoreToProto(WindowType code)
-{
-    // FIXME
-    return static_cast<Receiver::WindowType>(code);
-}
-
-inline Receiver::FilterShape FilterShapeCoreToProto(FilterShape filter_shape)
-{
-    // FIXME
-    return static_cast<Receiver::FilterShape>(filter_shape);
-}
-
-inline Receiver::DemodType DemodCoreToProto(Demod demod)
-{
-    // FIXME
-    return static_cast<Receiver::DemodType>(demod);
-}
-
-inline Timestamp TimestampCoreToProto(google::protobuf::Timestamp timestamp)
-{
-    Timestamp result;
-    result.nanos = timestamp.nanos();
-    result.seconds = timestamp.seconds();
-
-    return result;
-}
 
 static constexpr int ALLOCATOR_CAPACITY = 16;
 
@@ -807,7 +774,7 @@ void GrpcClient::OnGetFftDataCallDone(GetFftDataCall& call,
         return;
     }
 
-    Timestamp timestamp = TimestampCoreToProto(proto_frame.timestamp());
+    Timestamp timestamp = TimestampProtoToCore(proto_frame.timestamp());
     int64_t center_freq = static_cast<int64_t>(proto_frame.center_freq());
     int sample_rate = static_cast<int>(proto_frame.sample_rate());
 

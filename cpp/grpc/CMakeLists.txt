@@ -54,6 +54,19 @@ PUBLIC
 )
 
 add_library(
+type_conversion
+    type_conversion.h
+    type_conversion.cpp
+)
+
+target_link_libraries(
+type_conversion
+PUBLIC
+    protos
+    async_core_iface
+)
+
+add_library(
 grpc_client
     client.h
     client.cpp
@@ -64,6 +77,7 @@ target_link_libraries(
 grpc_client
 PUBLIC
     protos
+    type_conversion
     async_core_iface
     broadcast_queue
     spdlog::spdlog
@@ -79,6 +93,7 @@ target_link_libraries(
 grpc_server
 PUBLIC
     protos
+    type_conversion
     async_core_iface
     spdlog::spdlog
 )

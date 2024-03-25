@@ -359,11 +359,11 @@ QFuture<void> ReceiverModel::getIqFftData(FftFrame* frame)
     auto callback = [promise = std::move(promise),
                      frame](violetrx::ErrorCode code,
                             violetrx::Timestamp timestamp, int64_t centerFreq,
-                            int sampleRate, float*, int size) mutable {
+                            int sample_rate, float*, int size) mutable {
         if (code == violetrx::ErrorCode::OK) {
             frame->timestamp = timestamp;
             frame->center_freq = centerFreq;
-            frame->sample_rate = sampleRate;
+            frame->sample_rate = sample_rate;
             frame->fft_points.resize(size);
 
             promise.start();
@@ -1465,7 +1465,7 @@ void VFOChannelModel::onStateChanged(const void* event_erased)
                 INVOKE_METHOD(onRecordingStopped());
             },
             [&](const SnifferStarted& ev) {
-                INVOKE_METHOD(onSnifferStarted(ev.sampleRate, ev.buffSize));
+                INVOKE_METHOD(onSnifferStarted(ev.sample_rate, ev.size));
             },
             [&](const SnifferStopped&) { INVOKE_METHOD(onSnifferStopped()); },
             [&](const UdpStreamingStarted& ev) {

@@ -4,8 +4,6 @@
 #include <QObject>
 #include <QUrl>
 
-#include <array>
-
 #include <portaudio.h>
 #include <qtypes.h>
 #include <sndfile.h>
@@ -88,6 +86,7 @@ private:
         bool shouldSeek;
         quint32 pos;
     };
+    static_assert(std::atomic<SeekRequest>::is_always_lock_free);
 
     std::atomic<SeekRequest> seekRequest;
 };

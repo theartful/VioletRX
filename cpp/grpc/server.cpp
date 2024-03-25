@@ -7,6 +7,7 @@
 #include "async_core/async_vfo_iface.h"
 #include "receiver.pb.h"
 #include "server.h"
+#include "type_conversion.h"
 
 namespace violetrx
 {
@@ -23,40 +24,6 @@ namespace violetrx
 
 #define EXIT_VFO_CONTEXT()                                                     \
     })
-
-inline Receiver::ErrorCode ErrorCodeCoreToProto(ErrorCode code)
-{
-    // FIXME
-    return static_cast<Receiver::ErrorCode>(code);
-}
-
-inline WindowType WindowProtoToCore(Receiver::WindowType window)
-{
-    // FIXME
-    return static_cast<WindowType>(window);
-}
-
-inline FilterShape FilterShapeProtoToCore(Receiver::FilterShape filter_shape)
-{
-    // FIXME
-    return static_cast<FilterShape>(filter_shape);
-}
-
-inline Demod DemodProtoToCore(Receiver::DemodType demod)
-{
-    // FIXME
-    return static_cast<Demod>(demod);
-}
-
-inline google::protobuf::Timestamp TimestampCoreToProto(Timestamp timestamp)
-{
-    google::protobuf::Timestamp result;
-    result.set_nanos(timestamp.nanos);
-    result.set_seconds(timestamp.seconds);
-
-    return result;
-}
-
 GrpcServer::GrpcServer(AsyncReceiverIface::sptr async_receiver,
                        const std::string& addr_url) :
     async_receiver_{std::move(async_receiver)}

@@ -401,8 +401,8 @@ VioletEventGeneric event_cpp_to_c(const SnifferStarted& event)
 {
     return to_generic_event(VioletSnifferStarted{
         .base = to_vfo_event_base(event, VIOLET_VFO_SNIFFER_STARTED),
-        .sampleRate = event.sampleRate,
-        .buffSize = event.buffSize,
+        .sample_rate = event.sample_rate,
+        .size = event.size,
     });
 }
 
