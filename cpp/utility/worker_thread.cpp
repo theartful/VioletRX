@@ -63,6 +63,10 @@ void WorkerThread::start()
     thread = std::jthread(std::bind_front(&WorkerThread::startEventLoop, this));
 }
 
+bool WorkerThread::isJoinable() const {
+    return thread.joinable();
+}
+
 std::chrono::microseconds WorkerThread::getAvgLatency()
 {
     return std::chrono::microseconds(avgLatency / FACTOR);
@@ -103,6 +107,6 @@ void WorkerThread::startEventLoop(std::stop_token stopToken)
     }
 }
 
-std::thread::id WorkerThread::getId() { return thread.get_id(); }
+std::thread::id WorkerThread::getId() const { return thread.get_id(); }
 
 } // namespace violetrx

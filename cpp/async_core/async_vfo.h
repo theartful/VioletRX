@@ -115,6 +115,7 @@ public:
     float getAfGain() const override;
     UdpStreamParams getUdpStreamParams() const override;
     SnifferParams getSnifferParams() const override;
+    std::vector<VfoEvent> getStateAsEvents() const override;
 
     uint64_t getId() const override;
 
@@ -129,10 +130,13 @@ private:
                   const std::source_location = std::source_location::current());
 
     template <typename Event, typename... Args>
-    Event createEvent(VfoEventCommon, Args...);
+    Event createEvent(VfoEventCommon, Args...) const;
 
     template <typename Event, typename... Args>
     void stateChanged(Args... args);
+
+    template <typename Lambda>
+    void forEachStateEvent(Lambda&&) const;
 
 private:
     vfo_channel::sptr vfo;

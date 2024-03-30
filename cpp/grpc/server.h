@@ -4,11 +4,16 @@
 #include <memory>
 #include <string>
 
+#include <boost/signals2.hpp>
+#include <broadcast_queue.h>
+#include <unordered_map>
+
 #include "async_core/async_receiver_iface.h"
 #include "receiver.grpc.pb.h"
 
 namespace violetrx
 {
+
 class GrpcServer : public Receiver::Rx::CallbackService
 {
 public:
@@ -18,6 +23,11 @@ public:
 
     void Shutdown();
     void Wait();
+
+private:
+    // Runs in the async receiver thread
+    void HandleReceiverEvent(const ReceiverEvent&);
+    void HandleVfoEvent(const VfoEvent&);
 
 private:
     grpc::ServerUnaryReactor* Start(grpc::CallbackServerContext* context,
@@ -252,10 +262,28 @@ private:
                const Receiver::VfoHandle* request,
                Receiver::RdsDataResponse* response) override;
 
+    grpc::ServerWriteReactor<Receiver::Event>*
+    Subscribe(grpc::CallbackServerContext* context,
+              const google::protobuf::Empty* request) override;
+
+private:
+    class EventsReactor;
+
 private:
     std::unique_ptr<grpc::Server> server_;
     violetrx::AsyncReceiverIface::sptr async_receiver_;
+
+    boost::signals2::scoped_connection connection_;
+    std::unordered_map<uint64_t, boost::signals2::scoped_connection>
+        vfo_connections_;
+    // FIXME: Currently broadcast_queue is single producer multiple consumer.
+    // But this queue will accept events from the receiver and the vfos, so the
+    // underlying assumption here is that these events will come from a single
+    // thread, which is true but maybe it's time to extend the broadcast queue
+    // to be multiple producer?
+    broadcast_queue::sender<Event> events_queue_;
 };
+
 } // namespace violetrx
 
 #endif // VIOLETRX_GRPC_SERVER_H

@@ -6,6 +6,7 @@
 
 #include <bitmap_allocator.h>
 
+#include "async_core/events.h"
 #include "async_core/types.h"
 #include "client_call.h"
 #include "receiver.grpc.pb.h"
@@ -17,6 +18,7 @@ class GrpcClient
 {
 public:
     GrpcClient(const std::string& addr_url);
+    ~GrpcClient();
 
     void Start(Callback<> = {});
     void Stop(Callback<> = {});
@@ -71,8 +73,11 @@ public:
     void StartRdsDecoder(uint64_t, Callback<> = {});
     void StopRdsDecoder(uint64_t, Callback<> = {});
     void ResetRdsParser(uint64_t, Callback<> = {});
+    void Subscribe(EventHandler);
 
 private:
+    class EventsReactor;
+
     using Allocator = broadcast_queue::bitmap_allocator<ClientCall>;
     using AllocatorStorage = broadcast_queue::bitmap_allocator_storage;
 

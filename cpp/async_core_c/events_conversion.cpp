@@ -49,6 +49,12 @@ VioletEventGeneric event_cpp_to_c(const SyncEnd& event)
         VioletSyncEnd{.base = to_event_base(event, VIOLET_RECEIVER_SYNC_END)});
 }
 
+VioletEventGeneric event_cpp_to_c(const Unsubscribed& event)
+{
+    return to_generic_event(
+        VioletSyncEnd{.base = to_event_base(event, VIOLET_RECEIVER_UNSUBSCRIBED)});
+}
+
 VioletEventGeneric event_cpp_to_c(const Started& event)
 {
     return to_generic_event(

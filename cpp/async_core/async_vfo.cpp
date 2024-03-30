@@ -1,7 +1,7 @@
 #include "async_vfo.h"
 #include "async_core/events.h"
-#include "async_core/worker_thread.h"
 #include "error_codes.h"
+#include "utility/worker_thread.h"
 
 // FIXME: We need this becausae "start_audio_recording" checks first whether the
 // receiver is running or not. I think that this is generally really bad, since
@@ -47,37 +47,37 @@ void AsyncVfo::stateChanged(Args... args)
 }
 
 template <>
-VfoSyncStart AsyncVfo::createEvent<VfoSyncStart>(VfoEventCommon ec)
+VfoSyncStart AsyncVfo::createEvent<VfoSyncStart>(VfoEventCommon ec) const
 {
     return VfoSyncStart{ec};
 }
 template <>
-VfoRemoved AsyncVfo::createEvent<VfoRemoved>(VfoEventCommon ec)
+VfoRemoved AsyncVfo::createEvent<VfoRemoved>(VfoEventCommon ec) const
 {
     return VfoRemoved{ec};
 }
 template <>
-VfoSyncEnd AsyncVfo::createEvent<VfoSyncEnd>(VfoEventCommon ec)
+VfoSyncEnd AsyncVfo::createEvent<VfoSyncEnd>(VfoEventCommon ec) const
 {
     return VfoSyncEnd{ec};
 }
 template <>
-DemodChanged AsyncVfo::createEvent<DemodChanged>(VfoEventCommon ec)
+DemodChanged AsyncVfo::createEvent<DemodChanged>(VfoEventCommon ec) const
 {
     return DemodChanged{ec, getDemod()};
 }
 template <>
-OffsetChanged AsyncVfo::createEvent<OffsetChanged>(VfoEventCommon ec)
+OffsetChanged AsyncVfo::createEvent<OffsetChanged>(VfoEventCommon ec) const
 {
     return OffsetChanged{ec, getOffset()};
 }
 template <>
-CwOffsetChanged AsyncVfo::createEvent<CwOffsetChanged>(VfoEventCommon ec)
+CwOffsetChanged AsyncVfo::createEvent<CwOffsetChanged>(VfoEventCommon ec) const
 {
     return CwOffsetChanged{ec, getCwOffset()};
 }
 template <>
-FilterChanged AsyncVfo::createEvent<FilterChanged>(VfoEventCommon ec)
+FilterChanged AsyncVfo::createEvent<FilterChanged>(VfoEventCommon ec) const
 {
     auto filter = getFilter();
     return FilterChanged{ec, filter.shape, filter.low, filter.high};
@@ -85,135 +85,143 @@ FilterChanged AsyncVfo::createEvent<FilterChanged>(VfoEventCommon ec)
 template <>
 NoiseBlankerOnChanged
 AsyncVfo::createEvent<NoiseBlankerOnChanged>(VfoEventCommon ec, int nb_id,
-                                             bool enabled)
+                                             bool enabled) const
 {
     return NoiseBlankerOnChanged{ec, nb_id, enabled};
 }
 template <>
 NoiseBlankerThresholdChanged
 AsyncVfo::createEvent<NoiseBlankerThresholdChanged>(VfoEventCommon ec,
-                                                    int nb_id, float threshold)
+                                                    int nb_id,
+                                                    float threshold) const
 {
     return NoiseBlankerThresholdChanged{ec, nb_id, threshold};
 }
 template <>
-SqlLevelChanged AsyncVfo::createEvent<SqlLevelChanged>(VfoEventCommon ec)
+SqlLevelChanged AsyncVfo::createEvent<SqlLevelChanged>(VfoEventCommon ec) const
 {
     return SqlLevelChanged{ec, getSqlLevel()};
 }
 template <>
-SqlAlphaChanged AsyncVfo::createEvent<SqlAlphaChanged>(VfoEventCommon ec)
+SqlAlphaChanged AsyncVfo::createEvent<SqlAlphaChanged>(VfoEventCommon ec) const
 {
     return SqlAlphaChanged{ec, getSqlAlpha()};
 }
 template <>
-AgcOnChanged AsyncVfo::createEvent<AgcOnChanged>(VfoEventCommon ec)
+AgcOnChanged AsyncVfo::createEvent<AgcOnChanged>(VfoEventCommon ec) const
 {
     return AgcOnChanged{ec, isAgcOn()};
 }
 template <>
-AgcHangChanged AsyncVfo::createEvent<AgcHangChanged>(VfoEventCommon ec)
+AgcHangChanged AsyncVfo::createEvent<AgcHangChanged>(VfoEventCommon ec) const
 {
     return AgcHangChanged{ec, isAgcHangOn()};
 }
 template <>
 AgcThresholdChanged
-AsyncVfo::createEvent<AgcThresholdChanged>(VfoEventCommon ec)
+AsyncVfo::createEvent<AgcThresholdChanged>(VfoEventCommon ec) const
 {
     return AgcThresholdChanged{ec, getAgcThreshold()};
 }
 template <>
-AgcSlopeChanged AsyncVfo::createEvent<AgcSlopeChanged>(VfoEventCommon ec)
+AgcSlopeChanged AsyncVfo::createEvent<AgcSlopeChanged>(VfoEventCommon ec) const
 {
     return AgcSlopeChanged{ec, getAgcSlope()};
 }
 template <>
-AgcDecayChanged AsyncVfo::createEvent<AgcDecayChanged>(VfoEventCommon ec)
+AgcDecayChanged AsyncVfo::createEvent<AgcDecayChanged>(VfoEventCommon ec) const
 {
     return AgcDecayChanged{ec, getAgcDecay()};
 }
 template <>
 AgcManualGainChanged
-AsyncVfo::createEvent<AgcManualGainChanged>(VfoEventCommon ec)
+AsyncVfo::createEvent<AgcManualGainChanged>(VfoEventCommon ec) const
 {
     return AgcManualGainChanged{ec, getAgcManualGain()};
 }
 template <>
-FmMaxDevChanged AsyncVfo::createEvent<FmMaxDevChanged>(VfoEventCommon ec)
+FmMaxDevChanged AsyncVfo::createEvent<FmMaxDevChanged>(VfoEventCommon ec) const
 {
     return FmMaxDevChanged{ec, getFmMaxDev()};
 }
 template <>
-FmDeemphChanged AsyncVfo::createEvent<FmDeemphChanged>(VfoEventCommon ec)
+FmDeemphChanged AsyncVfo::createEvent<FmDeemphChanged>(VfoEventCommon ec) const
 {
     return FmDeemphChanged{ec, getFmDeemph()};
 }
 template <>
-AmDcrChanged AsyncVfo::createEvent<AmDcrChanged>(VfoEventCommon ec)
+AmDcrChanged AsyncVfo::createEvent<AmDcrChanged>(VfoEventCommon ec) const
 {
     return AmDcrChanged{ec, getAmDcr()};
 }
 template <>
-AmSyncDcrChanged AsyncVfo::createEvent<AmSyncDcrChanged>(VfoEventCommon ec)
+AmSyncDcrChanged
+AsyncVfo::createEvent<AmSyncDcrChanged>(VfoEventCommon ec) const
 {
     return AmSyncDcrChanged{ec, getAmSyncDcr()};
 }
 template <>
-AmSyncPllBwChanged AsyncVfo::createEvent<AmSyncPllBwChanged>(VfoEventCommon ec)
+AmSyncPllBwChanged
+AsyncVfo::createEvent<AmSyncPllBwChanged>(VfoEventCommon ec) const
 {
     return AmSyncPllBwChanged{ec, getAmSyncPllBw()};
 }
 template <>
-RecordingStarted AsyncVfo::createEvent<RecordingStarted>(VfoEventCommon ec)
+RecordingStarted
+AsyncVfo::createEvent<RecordingStarted>(VfoEventCommon ec) const
 {
     return RecordingStarted{ec, getRecordingFilename()};
 }
 template <>
-RecordingStopped AsyncVfo::createEvent<RecordingStopped>(VfoEventCommon ec)
+RecordingStopped
+AsyncVfo::createEvent<RecordingStopped>(VfoEventCommon ec) const
 {
     return RecordingStopped{ec};
 }
 template <>
-SnifferStarted AsyncVfo::createEvent<SnifferStarted>(VfoEventCommon ec)
+SnifferStarted AsyncVfo::createEvent<SnifferStarted>(VfoEventCommon ec) const
 {
     auto params = getSnifferParams();
     return SnifferStarted{ec, params.sampleRate, params.buffSize};
 }
 template <>
-SnifferStopped AsyncVfo::createEvent<SnifferStopped>(VfoEventCommon ec)
+SnifferStopped AsyncVfo::createEvent<SnifferStopped>(VfoEventCommon ec) const
 {
     return SnifferStopped{ec};
 }
 template <>
 UdpStreamingStarted
-AsyncVfo::createEvent<UdpStreamingStarted>(VfoEventCommon ec)
+AsyncVfo::createEvent<UdpStreamingStarted>(VfoEventCommon ec) const
 {
     auto params = getUdpStreamParams();
     return UdpStreamingStarted{ec, params.host, params.port, params.stereo};
 }
 template <>
 UdpStreamingStopped
-AsyncVfo::createEvent<UdpStreamingStopped>(VfoEventCommon ec)
+AsyncVfo::createEvent<UdpStreamingStopped>(VfoEventCommon ec) const
 {
     return UdpStreamingStopped{ec};
 }
 template <>
-RdsDecoderStarted AsyncVfo::createEvent<RdsDecoderStarted>(VfoEventCommon ec)
+RdsDecoderStarted
+AsyncVfo::createEvent<RdsDecoderStarted>(VfoEventCommon ec) const
 {
     return RdsDecoderStarted{ec};
 }
 template <>
-RdsDecoderStopped AsyncVfo::createEvent<RdsDecoderStopped>(VfoEventCommon ec)
+RdsDecoderStopped
+AsyncVfo::createEvent<RdsDecoderStopped>(VfoEventCommon ec) const
 {
     return RdsDecoderStopped{ec};
 }
 template <>
-RdsParserReset AsyncVfo::createEvent<RdsParserReset>(VfoEventCommon ec)
+RdsParserReset AsyncVfo::createEvent<RdsParserReset>(VfoEventCommon ec) const
 {
     return RdsParserReset{ec};
 }
 template <>
-AudioGainChanged AsyncVfo::createEvent<AudioGainChanged>(VfoEventCommon ec)
+AudioGainChanged
+AsyncVfo::createEvent<AudioGainChanged>(VfoEventCommon ec) const
 {
     return AudioGainChanged{ec, getAfGain()};
 }
@@ -1004,13 +1012,69 @@ void AsyncVfo::prepareToDie()
     stateChanged<VfoRemoved>();
 }
 
+std::vector<VfoEvent> AsyncVfo::getStateAsEvents() const
+{
+    std::vector<VfoEvent> result;
+
+    forEachStateEvent([&](const VfoEvent& event) { result.push_back(event); });
+
+    return result;
+}
+
+template <typename Lambda>
+void AsyncVfo::forEachStateEvent(Lambda&& lambda) const
+{
+    // FIXME: Maybe somehow keep track of when each state changed.
+    VfoEventCommon ec;
+    ec.id = -1;
+    ec.timestamp = {};
+    ec.handle = getId();
+
+    lambda(createEvent<DemodChanged>(ec));
+    lambda(createEvent<OffsetChanged>(ec));
+    lambda(createEvent<CwOffsetChanged>(ec));
+    lambda(createEvent<FilterChanged>(ec));
+    lambda(createEvent<NoiseBlankerOnChanged>(ec, 1, isNoiseBlanker1On()));
+    lambda(createEvent<NoiseBlankerOnChanged>(ec, 2, isNoiseBlanker2On()));
+    lambda(createEvent<NoiseBlankerThresholdChanged>(
+        ec, 1, getNoiseBlanker1Threshold()));
+    lambda(createEvent<NoiseBlankerThresholdChanged>(
+        ec, 2, getNoiseBlanker2Threshold()));
+    lambda(createEvent<SqlLevelChanged>(ec));
+    lambda(createEvent<SqlAlphaChanged>(ec));
+    lambda(createEvent<AgcOnChanged>(ec));
+    lambda(createEvent<AgcHangChanged>(ec));
+    lambda(createEvent<AgcThresholdChanged>(ec));
+    lambda(createEvent<AgcSlopeChanged>(ec));
+    lambda(createEvent<AgcDecayChanged>(ec));
+    lambda(createEvent<AgcManualGainChanged>(ec));
+    lambda(createEvent<FmMaxDevChanged>(ec));
+    lambda(createEvent<FmDeemphChanged>(ec));
+    lambda(createEvent<AmDcrChanged>(ec));
+    lambda(createEvent<AmSyncDcrChanged>(ec));
+    lambda(createEvent<AmSyncPllBwChanged>(ec));
+    if (isAudioRecording()) {
+        lambda(createEvent<RecordingStarted>(ec));
+    }
+    if (isSniffing()) {
+        lambda(createEvent<SnifferStarted>(ec));
+    }
+    if (isUdpStreaming()) {
+        lambda(createEvent<UdpStreamingStarted>(ec));
+    }
+    if (isRdsDecoderActive()) {
+        lambda(createEvent<RdsDecoderStarted>(ec));
+    }
+    lambda(createEvent<AudioGainChanged>(ec));
+}
+
 void AsyncVfo::subscribe(VfoEventHandler handler, Callback<Connection> callback)
 {
     std::weak_ptr<AsyncVfo> self =
         static_pointer_cast<AsyncVfo>(shared_from_this());
 
     schedule([self, handler = std::move(handler),
-              callback = std::move(callback), handle = getId()]() mutable {
+              callback = std::move(callback)]() mutable {
         auto sptr = self.lock();
         if (!sptr || sptr->m_removed) {
             callback(violetrx::ErrorCode::VFO_NOT_FOUND, {});
@@ -1023,48 +1087,11 @@ void AsyncVfo::subscribe(VfoEventHandler handler, Callback<Connection> callback)
         VfoEventCommon ec;
         ec.id = -1;
         ec.timestamp = {};
-        ec.handle = handle;
+        ec.handle = sptr->getId();
 
         handler(sptr->createEvent<VfoSyncStart>(ec));
 
-        handler(sptr->createEvent<DemodChanged>(ec));
-        handler(sptr->createEvent<OffsetChanged>(ec));
-        handler(sptr->createEvent<CwOffsetChanged>(ec));
-        handler(sptr->createEvent<FilterChanged>(ec));
-        handler(sptr->createEvent<NoiseBlankerOnChanged>(
-            ec, 1, sptr->isNoiseBlanker1On()));
-        handler(sptr->createEvent<NoiseBlankerOnChanged>(
-            ec, 2, sptr->isNoiseBlanker2On()));
-        handler(sptr->createEvent<NoiseBlankerThresholdChanged>(
-            ec, 1, sptr->getNoiseBlanker1Threshold()));
-        handler(sptr->createEvent<NoiseBlankerThresholdChanged>(
-            ec, 2, sptr->getNoiseBlanker2Threshold()));
-        handler(sptr->createEvent<SqlLevelChanged>(ec));
-        handler(sptr->createEvent<SqlAlphaChanged>(ec));
-        handler(sptr->createEvent<AgcOnChanged>(ec));
-        handler(sptr->createEvent<AgcHangChanged>(ec));
-        handler(sptr->createEvent<AgcThresholdChanged>(ec));
-        handler(sptr->createEvent<AgcSlopeChanged>(ec));
-        handler(sptr->createEvent<AgcDecayChanged>(ec));
-        handler(sptr->createEvent<AgcManualGainChanged>(ec));
-        handler(sptr->createEvent<FmMaxDevChanged>(ec));
-        handler(sptr->createEvent<FmDeemphChanged>(ec));
-        handler(sptr->createEvent<AmDcrChanged>(ec));
-        handler(sptr->createEvent<AmSyncDcrChanged>(ec));
-        handler(sptr->createEvent<AmSyncPllBwChanged>(ec));
-        if (sptr->isAudioRecording()) {
-            handler(sptr->createEvent<RecordingStarted>(ec));
-        }
-        if (sptr->isSniffing()) {
-            handler(sptr->createEvent<SnifferStarted>(ec));
-        }
-        if (sptr->isUdpStreaming()) {
-            handler(sptr->createEvent<UdpStreamingStarted>(ec));
-        }
-        if (sptr->isRdsDecoderActive()) {
-            handler(sptr->createEvent<RdsDecoderStarted>(ec));
-        }
-        handler(sptr->createEvent<AudioGainChanged>(ec));
+        sptr->forEachStateEvent(handler);
 
         handler(sptr->createEvent<VfoSyncEnd>(ec));
     });

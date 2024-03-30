@@ -72,9 +72,9 @@ Timestamp TimestampProtoToCore(google::protobuf::Timestamp timestamp)
     return result;
 }
 
-Event EventProtoToCore(const Receiver::Event& proto_event)
+std::optional<Event> EventProtoToCore(const Receiver::Event& proto_event)
 {
-    Event event;
+    std::optional<Event> event = std::nullopt;
 
     EventCommon ec;
     ec.id = proto_event.id();
@@ -86,6 +86,9 @@ Event EventProtoToCore(const Receiver::Event& proto_event)
         break;
     case Receiver::Event::TxCase::kSyncEnd:
         event = SyncEnd{ec};
+        break;
+    case Receiver::Event::TxCase::kUnsubscribed:
+        event = Unsubscribed{ec};
         break;
     case Receiver::Event::TxCase::kRxStarted:
         event = Started{ec};
@@ -338,7 +341,7 @@ Event EventProtoToCore(const Receiver::Event& proto_event)
     return event;
 }
 
-void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
+bool EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 {
     std::visit(
         [&](auto e) {
@@ -350,23 +353,32 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
         event);
 
     proto_event->clear_tx();
-    std::visit( //
+    return std::visit( //
         Visitor{
             [&](const SyncStart&) {
                 auto* proto_specific_event = new Receiver::SyncStart();
                 proto_event->set_allocated_sync_start(proto_specific_event);
+                return true;
             },
             [&](const SyncEnd&) {
                 auto* proto_specific_event = new Receiver::SyncEnd();
                 proto_event->set_allocated_sync_end(proto_specific_event);
+                return true;
+            },
+            [&](const Unsubscribed&) {
+                auto* proto_specific_event = new Receiver::Unsubscribed();
+                proto_event->set_allocated_unsubscribed(proto_specific_event);
+                return true;
             },
             [&](const Started&) {
                 auto* proto_specific_event = new Receiver::Started();
                 proto_event->set_allocated_rx_started(proto_specific_event);
+                return true;
             },
             [&](const Stopped&) {
                 auto* proto_specific_event = new Receiver::Stopped();
                 proto_event->set_allocated_rx_stopped(proto_specific_event);
+                return true;
             },
             [&](const InputDeviceChanged& ev) {
                 auto* proto_specific_event = new Receiver::InputDeviceChanged();
@@ -374,6 +386,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_input_dev_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AntennaChanged& ev) {
                 auto* proto_specific_event = new Receiver::AntennaChanged();
@@ -381,6 +394,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_antenna_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AntennasChanged& ev) {
                 auto* proto_specific_event = new Receiver::AntennasChanged();
@@ -389,6 +403,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_antennas_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const InputRateChanged& ev) {
                 auto* proto_specific_event = new Receiver::InputRateChanged();
@@ -396,6 +411,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_input_rate_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const RfFreqChanged& ev) {
                 auto* proto_specific_event = new Receiver::RfFreqChanged();
@@ -403,6 +419,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_rf_freq_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const InputDecimChanged& ev) {
                 auto* proto_specific_event = new Receiver::InputDecimChanged();
@@ -410,6 +427,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_input_decim_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const IqSwapChanged& ev) {
                 auto* proto_specific_event = new Receiver::IqSwapChanged();
@@ -417,6 +435,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_iq_swap_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const IqBalanceChanged& ev) {
                 auto* proto_specific_event = new Receiver::IqBalanceChanged();
@@ -424,6 +443,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_iq_balance_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const DcCancelChanged& ev) {
                 auto* proto_specific_event = new Receiver::DcCancelChanged();
@@ -431,6 +451,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_dc_cancel_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const GainStagesChanged& ev) {
                 auto* proto_specific_event = new Receiver::GainStagesChanged();
@@ -445,6 +466,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_gain_stages_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AutoGainChanged& ev) {
                 auto* proto_specific_event = new Receiver::AutoGainChanged();
@@ -452,6 +474,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_auto_gain_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const GainChanged& ev) {
                 auto* proto_specific_event = new Receiver::GainChanged();
@@ -459,6 +482,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
                 proto_specific_event->set_value(ev.value);
 
                 proto_event->set_allocated_gain_changed(proto_specific_event);
+                return true;
             },
             [&](const FftWindowChanged& ev) {
                 auto* proto_specific_event = new Receiver::FftWindowChanged();
@@ -467,6 +491,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_fft_window_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const FftSizeChanged& ev) {
                 auto* proto_specific_event = new Receiver::FftSizeChanged();
@@ -474,6 +499,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_fft_size_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const FreqCorrChanged& ev) {
                 auto* proto_specific_event = new Receiver::FreqCorrChanged();
@@ -481,39 +507,45 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_freq_corr_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const IqRecordingStarted&) {
                 // FIXME
                 spdlog::error(
                     "EventCoreToProto: IqRecordingStarted doesn't have "
                     "an equivalent proto type!");
+                return false;
             },
             [&](const IqRecordingStopped&) {
                 // FIXME
                 spdlog::error(
                     "EventCoreToProto: IqRecordingStopped doesn't have "
                     "an equivalent proto type!");
+                return false;
             },
             [&](const VfoAdded& ev) {
                 auto* proto_specific_event = new Receiver::VfoAdded();
                 proto_specific_event->set_handle(ev.handle);
 
                 proto_event->set_allocated_vfo_added(proto_specific_event);
+                return true;
             },
             [&](const VfoRemoved& ev) {
                 auto* proto_specific_event = new Receiver::VfoRemoved();
                 proto_specific_event->set_handle(ev.handle);
 
                 proto_event->set_allocated_vfo_removed(proto_specific_event);
+                return true;
             },
-            [&](const VfoSyncStart&) {},
-            [&](const VfoSyncEnd&) {},
+            [&](const VfoSyncStart&) { return false; },
+            [&](const VfoSyncEnd&) { return false; },
             [&](const DemodChanged& ev) {
                 auto* proto_specific_event = new Receiver::DemodChanged();
                 proto_specific_event->set_handle(ev.handle);
                 proto_specific_event->set_demod(DemodCoreToProto(ev.demod));
 
                 proto_event->set_allocated_demod_changed(proto_specific_event);
+                return true;
             },
             [&](const OffsetChanged& ev) {
                 auto* proto_specific_event = new Receiver::OffsetChanged();
@@ -521,6 +553,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
                 proto_specific_event->set_offset(ev.offset);
 
                 proto_event->set_allocated_offset_changed(proto_specific_event);
+                return true;
             },
             [&](const CwOffsetChanged& ev) {
                 auto* proto_specific_event = new Receiver::CwOffsetChanged();
@@ -529,6 +562,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_cw_offset_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const FilterChanged& ev) {
                 auto* proto_specific_event = new Receiver::FilterChanged();
@@ -539,6 +573,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
                     FilterShapeCoreToProto(ev.shape));
 
                 proto_event->set_allocated_filter_changed(proto_specific_event);
+                return true;
             },
             [&](const NoiseBlankerOnChanged& ev) {
                 auto* proto_specific_event =
@@ -548,6 +583,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
                 proto_specific_event->set_enabled(ev.enabled);
 
                 proto_event->set_allocated_nb_on_changed(proto_specific_event);
+                return true;
             },
             [&](const NoiseBlankerThresholdChanged& ev) {
                 auto* proto_specific_event =
@@ -558,6 +594,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_nb_threshold_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const SqlLevelChanged& ev) {
                 auto* proto_specific_event = new Receiver::SqlLevelChanged();
@@ -566,6 +603,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_sql_level_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const SqlAlphaChanged& ev) {
                 auto* proto_specific_event = new Receiver::SqlAlphaChanged();
@@ -574,6 +612,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_sql_alpha_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AgcOnChanged& ev) {
                 auto* proto_specific_event = new Receiver::AgcOnChanged();
@@ -581,6 +620,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
                 proto_specific_event->set_enabled(ev.enabled);
 
                 proto_event->set_allocated_agc_on_changed(proto_specific_event);
+                return true;
             },
             [&](const AgcHangChanged& ev) {
                 auto* proto_specific_event = new Receiver::AgcHangChanged();
@@ -589,6 +629,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_agc_hang_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AgcThresholdChanged& ev) {
                 auto* proto_specific_event =
@@ -598,6 +639,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_agc_threshold_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AgcSlopeChanged& ev) {
                 auto* proto_specific_event = new Receiver::AgcSlopeChanged();
@@ -606,6 +648,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_agc_slope_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AgcDecayChanged& ev) {
                 auto* proto_specific_event = new Receiver::AgcDecayChanged();
@@ -614,6 +657,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_agc_decay_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AgcManualGainChanged& ev) {
                 auto* proto_specific_event =
@@ -623,6 +667,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_agc_manual_gain_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const FmMaxDevChanged& ev) {
                 auto* proto_specific_event = new Receiver::FmMaxDevChanged();
@@ -631,6 +676,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_fm_maxdev_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const FmDeemphChanged& ev) {
                 auto* proto_specific_event = new Receiver::FmDeemphChanged();
@@ -639,6 +685,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_fm_deemph_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AmDcrChanged& ev) {
                 auto* proto_specific_event = new Receiver::AmDcrChanged();
@@ -646,6 +693,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
                 proto_specific_event->set_enabled(ev.enabled);
 
                 proto_event->set_allocated_am_dcr_changed(proto_specific_event);
+                return true;
             },
             [&](const AmSyncDcrChanged& ev) {
                 auto* proto_specific_event = new Receiver::AmSyncDcrChanged();
@@ -654,6 +702,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_am_sync_dcr_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const AmSyncPllBwChanged& ev) {
                 auto* proto_specific_event = new Receiver::AmSyncPllBwChanged();
@@ -662,6 +711,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_am_sync_pll_bw_changed(
                     proto_specific_event);
+                return true;
             },
             [&](const RecordingStarted& ev) {
                 auto* proto_specific_event = new Receiver::RecordingStarted();
@@ -670,6 +720,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_recording_started(
                     proto_specific_event);
+                return true;
             },
             [&](const RecordingStopped& ev) {
                 auto* proto_specific_event = new Receiver::RecordingStopped();
@@ -677,6 +728,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_recording_stopped(
                     proto_specific_event);
+                return true;
             },
             [&](const SnifferStarted& ev) {
                 auto* proto_specific_event = new Receiver::SnifferStarted();
@@ -686,6 +738,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_sniffer_started(
                     proto_specific_event);
+                return true;
             },
             [&](const SnifferStopped& ev) {
                 auto* proto_specific_event = new Receiver::SnifferStopped();
@@ -693,16 +746,19 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_sniffer_stopped(
                     proto_specific_event);
+                return true;
             },
             [&](const UdpStreamingStarted&) {
                 spdlog::error(
                     "EventCoreToProto: UdpStreamingStarted doesn't have "
                     "an equivalent proto type!");
+                return false;
             },
             [&](const UdpStreamingStopped&) {
                 spdlog::error(
                     "EventCoreToProto: UdpStreamingStopped doesn't have "
                     "an equivalent proto type!");
+                return false;
             },
             [&](const RdsDecoderStarted& ev) {
                 auto* proto_specific_event = new Receiver::RdsDecoderStarted();
@@ -710,6 +766,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_rds_decoder_started(
                     proto_specific_event);
+                return true;
             },
             [&](const RdsDecoderStopped& ev) {
                 auto* proto_specific_event = new Receiver::RdsDecoderStopped();
@@ -717,6 +774,7 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_rds_decoder_stopped(
                     proto_specific_event);
+                return true;
             },
             [&](const RdsParserReset& ev) {
                 auto* proto_specific_event = new Receiver::RdsParserReset();
@@ -724,11 +782,13 @@ void EventCoreToProto(const Event& event, Receiver::Event* proto_event)
 
                 proto_event->set_allocated_rds_parser_reset(
                     proto_specific_event);
+                return true;
             },
             [&](const AudioGainChanged&) {
                 // FIXME: Audio should be client side
                 spdlog::error("EventCoreToProto: AudioGainChanged doesn't have "
                               "an equivalent proto type!");
+                return false;
             },
         },
         event);

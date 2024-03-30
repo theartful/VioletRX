@@ -65,6 +65,7 @@ message GainStage
 // receiver events
 message SyncStart {}
 message SyncEnd {}
+message Unsubscribed {}
 message Started {}
 message Stopped {}
 message InputDeviceChanged { string device = 1; }
@@ -267,6 +268,7 @@ message Event
         RdsDecoderStarted rds_decoder_started = 48;
         RdsDecoderStopped rds_decoder_stopped = 49;
         RdsParserReset rds_parser_reset = 50;
+        Unsubscribed unsubscribed = 51;
     }
 }
 

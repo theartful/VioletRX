@@ -28,6 +28,25 @@ using Signal = boost::signals2::signal<Args...>;
 struct Timestamp {
     uint64_t seconds;
     uint32_t nanos;
+
+    template <typename Clock, typename Duration>
+    static inline Timestamp
+    TimepointToTimestamp(const std::chrono::time_point<Clock, Duration>& t)
+    {
+        auto seconds = std::chrono::duration_cast<std::chrono::seconds>(
+            t.time_since_epoch());
+
+        auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            t.time_since_epoch() - seconds);
+
+        return Timestamp{.seconds = static_cast<uint64_t>(seconds.count()),
+                         .nanos = static_cast<uint32_t>(nanos.count())};
+    }
+
+    static inline Timestamp Now()
+    {
+        return TimepointToTimestamp(std::chrono::system_clock::now());
+    }
 };
 
 struct GainStage {
@@ -105,27 +124,9 @@ enum class WindowType {
     GAUSSIAN = 14,
     TUKEY = 15,
 };
+
 template <typename... Args>
 using Callback = fu2::unique_function<void(ErrorCode, Args...)>;
-
-template <typename Clock, typename Duration>
-static inline Timestamp
-timepoint_to_timestamp(const std::chrono::time_point<Clock, Duration>& t)
-{
-    auto seconds =
-        std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch());
-
-    auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        t.time_since_epoch() - seconds);
-
-    return Timestamp{.seconds = static_cast<uint64_t>(seconds.count()),
-                     .nanos = static_cast<uint32_t>(nanos.count())};
-}
-
-static inline Timestamp now()
-{
-    return timepoint_to_timestamp(std::chrono::system_clock::now());
-}
 
 } // namespace violetrx
 

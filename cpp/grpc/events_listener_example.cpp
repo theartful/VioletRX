@@ -2,21 +2,15 @@
 #include <gflags/gflags.h>
 #include <spdlog/spdlog.h>
 
-#include "async_core/async_receiver.h"
-#include "server.h"
+#include "async_core/events_format.h"
+#include "grpc/client.h"
 
 DEFINE_string(url, "0.0.0.0:50050", "Server URL");
 
-int main(int argc, char** argv)
+int main()
 {
-    // Parse command line flags.
-    gflags::ParseCommandLineFlags(&argc, &argv, true);
-
-    spdlog::set_level(spdlog::level::debug);
-
-    // Start the server.
-    violetrx::AsyncReceiver::sptr receiver = violetrx::AsyncReceiver::make();
-    violetrx::GrpcServer server{receiver, FLAGS_url};
+    violetrx::GrpcClient client{FLAGS_url};
+    client.Subscribe([](const violetrx::Event& event) { spdlog::info(event); });
 
     // Wait for SIGTERM/SIGINT signals.
     boost::asio::io_context ctx;
@@ -26,7 +20,6 @@ int main(int argc, char** argv)
         [&]([[maybe_unused]] const boost::system::error_code& error,
             [[maybe_unused]] int signal_number) {
             spdlog::info("Shutting down...");
-            server.Shutdown();
         });
 
     ctx.run();

@@ -52,7 +52,6 @@ class VFOGraphicsItem;
 class VfosOpt;
 class ReceiverModel;
 class VFOChannelModel;
-enum class FilterShape;
 
 class MainWindow : public QMainWindow
 {

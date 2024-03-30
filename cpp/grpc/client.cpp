@@ -6,6 +6,7 @@
 #include <grpcpp/support/channel_arguments.h>
 #include <spdlog/spdlog.h>
 
+#include "async_core/events.h"
 #include "client.h"
 #include "type_conversion.h"
 
@@ -647,6 +648,79 @@ void GrpcClient::ResetRdsParser(uint64_t handle, Callback<> callback)
         WRAP(data, call, &GrpcClient::OnResetRdsParserCallDone));
 }
 
+class GrpcClient::EventsReactor
+    : public grpc::ClientReadReactor<::Receiver::Event>
+{
+public:
+    EventsReactor(std::shared_ptr<Receiver::Rx::Stub> stub,
+                  EventHandler callback) :
+        stub_{std::move(stub)},
+        callback_{std::move(callback)},
+        unsubscribed_{false}
+    {
+        stub_->async()->Subscribe(&context_, &request_, this);
+        StartRead(&response_);
+        StartCall();
+    }
+
+    void DeclareUnsubscription()
+    {
+        if (!unsubscribed_) {
+            callback_(Unsubscribed{{.id = -1, .timestamp = Timestamp::Now()}});
+            unsubscribed_ = true;
+        }
+    }
+
+    void OnReadDone(bool ok) override
+    {
+        if (!ok) {
+            DeclareUnsubscription();
+            return;
+        }
+
+        std::optional<Event> maybe_event = EventProtoToCore(response_);
+        if (maybe_event.has_value()) {
+            const Event& event = *maybe_event;
+
+            if (std::holds_alternative<Unsubscribed>(event)) {
+                DeclareUnsubscription();
+            } else {
+                callback_(event);
+            }
+        } else {
+            spdlog::error(
+                "Receiver an event of type {} that I couldn't convert!",
+                (int)response_.tx_case());
+        }
+
+        // Read the next event!
+        StartRead(&response_);
+    }
+
+    void OnDone(const grpc::Status&) override
+    {
+        DeclareUnsubscription();
+
+        // Very scary!
+        delete this;
+    }
+
+private:
+    std::shared_ptr<Receiver::Rx::Stub> stub_;
+    grpc::ClientContext context_;
+    google::protobuf::Empty request_;
+    Receiver::Event response_;
+
+    EventHandler callback_;
+
+    bool unsubscribed_;
+};
+
+void GrpcClient::Subscribe(EventHandler callback)
+{
+    new EventsReactor(stub_, std::move(callback));
+}
+
 template <typename CallType>
 void GrpcClient::OnEmptyResponseCallDone(CallType& call,
                                          const grpc::Status& status)
@@ -982,5 +1056,7 @@ GrpcClient::Allocate(T&&... args)
     return {UniqueClientCallPtr{ptr, Deleter{allocator_}},
             std::get<CallType>(*ptr)};
 }
+
+GrpcClient::~GrpcClient() { spdlog::debug("~GrpcClient"); }
 
 } // namespace violetrx

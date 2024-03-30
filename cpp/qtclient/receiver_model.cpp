@@ -77,13 +77,18 @@ void ReceiverModel::subscribe()
         [this](violetrx::ErrorCode err, violetrx::Connection connection) {
             if (err == violetrx::ErrorCode::OK) {
                 conStateChanged = std::move(connection);
+                onSubscribed();
             } else {
                 // TODO
             }
         });
 }
 
-void ReceiverModel::unsubscribe() { rx->unsubscribe(conStateChanged); }
+void ReceiverModel::unsubscribe()
+{
+    rx->unsubscribe(conStateChanged);
+    onUnsubscribed();
+}
 
 void ReceiverModel::onStateChanged(const void* event_erased)
 {
@@ -96,72 +101,74 @@ void ReceiverModel::onStateChanged(const void* event_erased)
     using namespace violetrx;
 
     const ReceiverEvent& e = *static_cast<const ReceiverEvent*>(event_erased);
-    std::visit(Visitor{
-                   [&](const SyncStart&) { INVOKE_METHOD(onSyncStart()); },
-                   [&](const SyncEnd&) { INVOKE_METHOD(onSyncEnd()); },
-                   [&](const Started&) { INVOKE_METHOD(onStarted()); },
-                   [&](const Stopped&) { INVOKE_METHOD(onStopped()); },
-                   [&](const InputDeviceChanged& ev) {
-                       INVOKE_METHOD(onInputDeviceChanged(ev.device));
-                   },
-                   [&](const AntennaChanged& ev) {
-                       INVOKE_METHOD(onAntennaChanged(ev.antenna));
-                   },
-                   [&](const AntennasChanged& ev) {
-                       INVOKE_METHOD(onAntennasChanged(ev.antennas));
-                   },
-                   [&](const InputRateChanged& ev) {
-                       INVOKE_METHOD(onInputRateChanged(ev.input_rate));
-                   },
-                   [&](const RfFreqChanged& ev) {
-                       INVOKE_METHOD(onInputRateChanged(ev.freq));
-                   },
-                   [&](const InputDecimChanged& ev) {
-                       INVOKE_METHOD(onInputDecimChanged(ev.decim));
-                   },
-                   [&](const IqSwapChanged& ev) {
-                       INVOKE_METHOD(onIqSwapChanged(ev.enabled));
-                   },
-                   [&](const IqBalanceChanged& ev) {
-                       INVOKE_METHOD(onIqBalanceChanged(ev.enabled));
-                   },
-                   [&](const DcCancelChanged& ev) {
-                       INVOKE_METHOD(onDcCancelChanged(ev.enabled));
-                   },
-                   [&](const GainStagesChanged& ev) {
-                       INVOKE_METHOD(onGainStagesChanged(ev.stages));
-                   },
-                   [&](const AutoGainChanged& ev) {
-                       INVOKE_METHOD(onAutoGainChanged(ev.enabled));
-                   },
-                   [&](const GainChanged& ev) {
-                       INVOKE_METHOD(onGainChanged(ev.name, ev.value));
-                   },
-                   [&](const FftWindowChanged& ev) {
-                       INVOKE_METHOD(onIqFftWindowChanged(ev.window, false));
-                   },
-                   [&](const FftSizeChanged& ev) {
-                       INVOKE_METHOD(onIqFftSizeChanged(ev.size));
-                   },
-                   [&](const VfoAdded& ev) {
-                       auto vfo = rx->getVfo(ev.handle);
-                       INVOKE_METHOD(onVfoAdded(vfo));
-                   },
-                   [&](const VfoRemoved& ev) {
-                       auto vfo = rx->getVfo(ev.handle);
-                       INVOKE_METHOD(onVfoRemoved(vfo));
-                   },
-                   [&](const IqRecordingStarted& ev) {
-                       INVOKE_METHOD(onIqRecordingStarted(ev.path));
-                   },
-                   [&](const IqRecordingStopped&) {
-                       INVOKE_METHOD(onIqRecordingStopped());
-                   },
-                   [&](const FreqCorrChanged& ev) {
-                       INVOKE_METHOD(onFreqCorrChanged(ev.ppm));
-                   },
-               },
-               e);
+    std::visit(
+        Visitor{
+            [&](const SyncStart&) { INVOKE_METHOD(onSyncStart()); },
+            [&](const SyncEnd&) { INVOKE_METHOD(onSyncEnd()); },
+            [&](const Unsubscribed&) { INVOKE_METHOD(onUnsubscribed()); },
+            [&](const Started&) { INVOKE_METHOD(onStarted()); },
+            [&](const Stopped&) { INVOKE_METHOD(onStopped()); },
+            [&](const InputDeviceChanged& ev) {
+                INVOKE_METHOD(onInputDeviceChanged(ev.device));
+            },
+            [&](const AntennaChanged& ev) {
+                INVOKE_METHOD(onAntennaChanged(ev.antenna));
+            },
+            [&](const AntennasChanged& ev) {
+                INVOKE_METHOD(onAntennasChanged(ev.antennas));
+            },
+            [&](const InputRateChanged& ev) {
+                INVOKE_METHOD(onInputRateChanged(ev.input_rate));
+            },
+            [&](const RfFreqChanged& ev) {
+                INVOKE_METHOD(onInputRateChanged(ev.freq));
+            },
+            [&](const InputDecimChanged& ev) {
+                INVOKE_METHOD(onInputDecimChanged(ev.decim));
+            },
+            [&](const IqSwapChanged& ev) {
+                INVOKE_METHOD(onIqSwapChanged(ev.enabled));
+            },
+            [&](const IqBalanceChanged& ev) {
+                INVOKE_METHOD(onIqBalanceChanged(ev.enabled));
+            },
+            [&](const DcCancelChanged& ev) {
+                INVOKE_METHOD(onDcCancelChanged(ev.enabled));
+            },
+            [&](const GainStagesChanged& ev) {
+                INVOKE_METHOD(onGainStagesChanged(ev.stages));
+            },
+            [&](const AutoGainChanged& ev) {
+                INVOKE_METHOD(onAutoGainChanged(ev.enabled));
+            },
+            [&](const GainChanged& ev) {
+                INVOKE_METHOD(onGainChanged(ev.name, ev.value));
+            },
+            [&](const FftWindowChanged& ev) {
+                INVOKE_METHOD(onIqFftWindowChanged(ev.window, false));
+            },
+            [&](const FftSizeChanged& ev) {
+                INVOKE_METHOD(onIqFftSizeChanged(ev.size));
+            },
+            [&](const VfoAdded& ev) {
+                auto vfo = rx->getVfo(ev.handle);
+                INVOKE_METHOD(onVfoAdded(vfo));
+            },
+            [&](const VfoRemoved& ev) {
+                auto vfo = rx->getVfo(ev.handle);
+                INVOKE_METHOD(onVfoRemoved(vfo));
+            },
+            [&](const IqRecordingStarted& ev) {
+                INVOKE_METHOD(onIqRecordingStarted(ev.path));
+            },
+            [&](const IqRecordingStopped&) {
+                INVOKE_METHOD(onIqRecordingStopped());
+            },
+            [&](const FreqCorrChanged& ev) {
+                INVOKE_METHOD(onFreqCorrChanged(ev.ppm));
+            },
+        },
+        e);
 
 #undef INVOKE_METHOD
 }

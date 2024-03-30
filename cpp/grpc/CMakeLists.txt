@@ -79,8 +79,8 @@ PUBLIC
     protos
     type_conversion
     async_core_iface
-    broadcast_queue
     spdlog::spdlog
+    broadcast_queue
 )
 
 add_library(
@@ -93,9 +93,11 @@ target_link_libraries(
 grpc_server
 PUBLIC
     protos
+    utility
     type_conversion
     async_core_iface
     spdlog::spdlog
+    broadcast_queue
 )
 
 find_package(gflags REQUIRED)
@@ -105,3 +107,6 @@ target_link_libraries(headless_server grpc_server async_core gflags)
 
 add_executable(client_test client_test.cpp)
 target_link_libraries(client_test grpc_client gflags)
+
+add_executable(events_listener_example events_listener_example.cpp)
+target_link_libraries(events_listener_example grpc_client gflags)

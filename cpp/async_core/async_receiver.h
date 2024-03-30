@@ -55,7 +55,7 @@ public:
     void removeVfoChannel(AsyncVfoIfaceSptr, Callback<> = {}) override;
     void removeVfoChannel(uint64_t, Callback<> = {}) override;
 
-    /* Sync API: getters can only be called inside a successful synchronize
+    /* Sync API: getters can only be called inside a successful callback
      * function */
     void synchronize(Callback<>) override;
     bool isRunning() const override;
@@ -77,6 +77,7 @@ public:
     std::vector<std::shared_ptr<AsyncVfoIface>> getVfos() const override;
     AsyncVfoIfaceSptr getVfo(uint64_t handle) const override;
     std::string iqRecordingPath() const override;
+    std::vector<ReceiverEvent> getStateAsEvents() const override;
 
 private:
     template <typename Function>
@@ -84,12 +85,15 @@ private:
                   const std::source_location = std::source_location::current());
 
     template <typename Event, typename... Args>
-    Event createEvent(EventCommon, Args...);
+    Event createEvent(EventCommon, Args...) const;
 
     template <typename Event, typename... Args>
     void stateChanged(Args... args);
 
     void removeVfoChannelImpl(std::shared_ptr<AsyncVfo>, Callback<>);
+
+    template <typename Lambda>
+    void forEachStateEvent(Lambda&&) const;
 
 private:
     receiver::sptr rx;

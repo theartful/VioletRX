@@ -108,6 +108,7 @@ public:
     virtual float getAfGain() const = 0;
     virtual UdpStreamParams getUdpStreamParams() const = 0;
     virtual SnifferParams getSnifferParams() const = 0;
+    virtual std::vector<VfoEvent> getStateAsEvents() const = 0;
 
     virtual uint64_t getId() const = 0;
     // This doesn't seem right

@@ -1,3 +1,7 @@
+#include <chrono>
+#include <queue>
+
+#include <atomic>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -5,9 +9,11 @@
 #include <spdlog/spdlog.h>
 
 #include "async_core/async_vfo_iface.h"
+#include "async_core/events_format.h" // IWYU pragma: keep
 #include "receiver.pb.h"
 #include "server.h"
 #include "type_conversion.h"
+#include "utility/worker_thread.h"
 
 namespace violetrx
 {
@@ -24,10 +30,32 @@ namespace violetrx
 
 #define EXIT_VFO_CONTEXT()                                                     \
     })
+
+constexpr int kEventsQueueSize = 64;
+
 GrpcServer::GrpcServer(AsyncReceiverIface::sptr async_receiver,
                        const std::string& addr_url) :
-    async_receiver_{std::move(async_receiver)}
+    async_receiver_{std::move(async_receiver)}, events_queue_{kEventsQueueSize}
 {
+    // FIXME: Should we wait for subscription to succeed before we start the
+    // server?
+    async_receiver_->subscribe(
+        // Fun fact: Using a lambda is better than using std::bind_front for
+        // member functions. That's because a lambda holds the member function
+        // information in its type, while std::bind_front holds the member
+        // function information as a pointer.
+        // For example, this lambda should have size 8, while std::bind_front
+        // would have around 24 (8 for this, 16 for the function and the virtual
+        // table)
+        [this](const ReceiverEvent& event) { HandleReceiverEvent(event); },
+        [this](ErrorCode err, Connection connection) {
+            if (err == ErrorCode::OK) {
+                connection_ = std::move(connection);
+            } else {
+                // FIXME
+            }
+        });
+
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
 
@@ -41,6 +69,52 @@ GrpcServer::GrpcServer(AsyncReceiverIface::sptr async_receiver,
     server_ = builder.BuildAndStart();
 
     spdlog::info("Server listening on {}", addr_url);
+}
+
+void GrpcServer::HandleReceiverEvent(const ReceiverEvent& event)
+{
+    spdlog::debug("{}", event);
+
+    // TODO: Assert that we're in the async receiver thread
+    events_queue_.push(ToGeneralEvent(event));
+
+    if (std::holds_alternative<VfoAdded>(event)) {
+        const auto& vfo_added_event = std::get<VfoAdded>(event);
+        const uint64_t handle = vfo_added_event.handle;
+        auto vfo = async_receiver_->getVfo(handle);
+
+        vfo->subscribe( //
+            [this](const VfoEvent& event) { HandleVfoEvent(event); },
+            [this, handle](ErrorCode err, Connection connection) {
+                if (err == ErrorCode::OK) {
+                    vfo_connections_.emplace(handle,
+                                             boost::signals2::scoped_connection(
+                                                 std::move(connection)));
+                } else {
+                    // FIXME
+                }
+            });
+    } else if (std::holds_alternative<VfoRemoved>(event)) {
+        const auto& vfo_removed_event = std::get<VfoRemoved>(event);
+        const uint64_t handle = vfo_removed_event.handle;
+
+        vfo_connections_.erase(handle);
+    }
+}
+void GrpcServer::HandleVfoEvent(const VfoEvent& event)
+{
+    spdlog::debug("{}", event);
+
+    // TODO: Assert that we're in the async receiver thread
+
+    // VfoRemoved events are always fired from the receiver, but can be fired
+    // from the Vfo as well, so let's not handle them since they will be handled
+    // in HandleReceiverEvent
+    if (std::holds_alternative<VfoRemoved>(event)) {
+        return;
+    }
+
+    events_queue_.push(ToGeneralEvent(event));
 }
 
 grpc::ServerUnaryReactor*
@@ -930,9 +1004,198 @@ GrpcServer::GetRdsData(grpc::CallbackServerContext* context,
     return reactor;
 }
 
+class GrpcServer::EventsReactor
+    : public grpc::ServerWriteReactor<Receiver::Event>
+{
+public:
+    EventsReactor(grpc::CallbackServerContext* context, GrpcServer* server) :
+        context_{context},
+        server_{server},
+        finished_{false},
+        unsubscribed_{false}
+    {
+        spdlog::info("GrpcServer: Client ({}) has subscribed",
+                     context_->peer());
+
+        server_->async_receiver_->synchronize([this](ErrorCode err) {
+            if (err != ErrorCode::OK) {
+                // FIXME: Should probably pass the error somehow.
+                Finish(grpc::Status::CANCELLED);
+                return;
+            }
+
+            // Setting up sync events. We begin with a SyncStart event.
+            sync_events_.push(
+                SyncStart{{.id = -1, .timestamp = Timestamp::Now()}});
+
+            // First we set up sync events from the receiver.
+            std::vector<ReceiverEvent> events =
+                server_->async_receiver_->getStateAsEvents();
+
+            for (const ReceiverEvent& event : events) {
+                sync_events_.push(ToGeneralEvent(event));
+            }
+
+            // Now we set up sync events from each vfo.
+            auto vfos = server_->async_receiver_->getVfos();
+            for (const auto& vfo : vfos) {
+                std::vector<VfoEvent> vfo_events = vfo->getStateAsEvents();
+
+                for (const VfoEvent& event : vfo_events) {
+                    sync_events_.push(ToGeneralEvent(event));
+                }
+            }
+
+            // We finish with a sync end event.
+            sync_events_.push(
+                SyncEnd{{.id = -1, .timestamp = Timestamp::Now()}});
+
+            // Now subscribe so that when we finish sending the sync events,
+            // we continue with the new events that happened directly after the
+            // point in time sync events were taken from.
+            events_reader_ = server_->events_queue_.subscribe();
+
+            // Let's send the first sync event (SyncStart)
+            WriteSyncEvent();
+
+            // Start the worker thread, which will be used to wait on the events
+            // queue.
+            worker_thread_.start();
+        });
+    }
+
+    void WriteSyncEvent()
+    {
+        bool convertible_event;
+        do {
+            convertible_event = WriteEvent(sync_events_.front());
+            sync_events_.pop();
+        } while (!convertible_event);
+    }
+
+    void WaitAndWriteEvent()
+    {
+        Event event;
+        while (true) {
+            broadcast_queue::Error err = events_reader_.wait_dequeue_timed(
+                &event, std::chrono::seconds(5));
+
+            switch (err) {
+            case broadcast_queue::Error::None:
+                if (std::holds_alternative<Unsubscribed>(event)) {
+                    unsubscribed_ = true;
+                }
+
+                if (WriteEvent(event)) {
+                    return;
+                }
+                break;
+            case broadcast_queue::Error::Timeout:
+                // Keep trying!
+                break;
+            case broadcast_queue::Error::Lagged:
+                spdlog::info("Client ({}) lagged. Disconnecting...",
+                             context_->peer());
+                FinishIfNotAlreadyFinished(grpc::Status::CANCELLED);
+                return;
+
+            case broadcast_queue::Error::Closed:
+                // Events queue closed. This can only mean that we're shutting
+                // down. So we just return.
+                FinishIfNotAlreadyFinished(grpc::Status::CANCELLED);
+                return;
+            }
+        }
+    }
+
+    void FinishIfNotAlreadyFinished(const grpc::Status& status)
+    {
+        bool expected = false;
+
+        // CAS shouldn't be necessary since the threads running this class never
+        // intersect, but just to be safe.
+        if (finished_.compare_exchange_strong(expected, true)) {
+            Finish(status);
+        }
+    }
+
+    // Returns false if the event doesn't have an equivalent proto event.
+    bool WriteEvent(const Event& event)
+    {
+        bool ok = EventCoreToProto(event, &response_);
+
+        if (ok) {
+            StartWrite(&response_);
+        }
+
+        return ok;
+    }
+
+    void OnWriteDone(bool ok) override
+    {
+        if (!ok) {
+            spdlog::info("Failed to send event to ({}). Unsubscribing him!",
+                         context_->peer());
+
+            FinishIfNotAlreadyFinished(grpc::Status::OK);
+            return;
+        }
+
+        // If there are still sync events, let's write it.
+        if (!sync_events_.empty()) {
+            WriteSyncEvent();
+        } else if (unsubscribed_) {
+            Finish(grpc::Status::OK);
+        } else {
+            worker_thread_.schedule("WaitAndWriteEvent",
+                                    [this]() { WaitAndWriteEvent(); });
+        }
+    }
+
+    void OnDone() override
+    {
+        spdlog::info("GrpcServer: Finished dealing with ({}). Self deleting!",
+                     context_->peer());
+        // Very scary!
+        delete this;
+    }
+
+private:
+    grpc::CallbackServerContext* context_;
+    Receiver::Event response_;
+    GrpcServer* server_;
+
+    // First events to send, and after we finish them, we read from the
+    // broadcast_queue
+    std::queue<Event> sync_events_;
+    broadcast_queue::receiver<Event> events_reader_;
+
+    // Is using a worker thread an overkill? Maybe use a raw thread?
+    WorkerThread worker_thread_;
+
+    // There are two logical threads: The worker thread, and the grpc callback
+    // thread. They never intersect, but just to be safe.
+    std::atomic<bool> finished_;
+    std::atomic<bool> unsubscribed_;
+};
+
+grpc::ServerWriteReactor<Receiver::Event>*
+GrpcServer::Subscribe(grpc::CallbackServerContext* context,
+                      [[maybe_unused]] const google::protobuf::Empty* request)
+{
+    return new EventsReactor(context, this);
+}
+
 GrpcServer::~GrpcServer() { Shutdown(); }
 
 void GrpcServer::Wait() { server_->Wait(); }
-void GrpcServer::Shutdown() { server_->Shutdown(); }
+void GrpcServer::Shutdown()
+{
+    // Manually close the queue so that subscribers finish their wait loop for
+    // new events.
+    events_queue_.close();
+
+    server_->Shutdown();
+}
 
 } // namespace violetrx

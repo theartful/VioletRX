@@ -24,8 +24,8 @@ Demod DemodProtoToCore(Receiver::DemodType demod);
 Timestamp TimestampProtoToCore(google::protobuf::Timestamp timestamp);
 google::protobuf::Timestamp TimestampCoreToProto(Timestamp timestamp);
 
-Event EventProtoToCore(const Receiver::Event& proto_event);
-void EventCoreToProto(const Event& event, Receiver::Event* proto_event);
+std::optional<Event> EventProtoToCore(const Receiver::Event& proto_event);
+bool EventCoreToProto(const Event& event, Receiver::Event* proto_event);
 
 } // namespace violetrx
 

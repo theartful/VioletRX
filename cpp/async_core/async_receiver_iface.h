@@ -98,6 +98,7 @@ public:
     virtual std::vector<std::shared_ptr<AsyncVfoIface>> getVfos() const = 0;
     virtual AsyncVfoIfaceSptr getVfo(uint64_t handle) const = 0;
     virtual std::string iqRecordingPath() const = 0;
+    virtual std::vector<ReceiverEvent> getStateAsEvents() const = 0;
 
 protected:
     Signal<void(const ReceiverEvent&)> signalStateChanged;

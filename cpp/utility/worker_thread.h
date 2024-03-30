@@ -31,7 +31,9 @@ public:
     void stop();
     void join();
     void start();
-    std::thread::id getId();
+    bool isJoinable() const;
+
+    std::thread::id getId() const;
 
     // NOTE: this function will synchronously execute the task if we're already
     // in the worker thread

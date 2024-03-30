@@ -1,3 +1,7 @@
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+
 find_package(spdlog REQUIRED)
 
 include(FetchContent)
@@ -8,10 +12,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(broadcast_queue)
 
+include(FetchContent)
+FetchContent_Declare(
+    function2
+    GIT_REPOSITORY    https://github.com/Naios/function2
+    GIT_TAG           master
+)
+FetchContent_MakeAvailable(function2)
 
-set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+FetchContent_Declare(
+  concurrentqueue
+  GIT_REPOSITORY    https://github.com/cameron314/concurrentqueue
+  GIT_TAG           master
+)
+FetchContent_MakeAvailable(concurrentqueue)
 
 add_subdirectory(utility)
 add_subdirectory(dsp)

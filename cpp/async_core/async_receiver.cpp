@@ -3,7 +3,7 @@
 #include "async_vfo.h"
 #include "core/vfo_channel.h"
 #include "error_codes.h"
-#include "worker_thread.h"
+#include "utility/worker_thread.h"
 
 #include <algorithm>
 #include <memory>
@@ -48,123 +48,133 @@ void AsyncReceiver::stateChanged(Args... args)
 }
 
 template <>
-SyncStart AsyncReceiver::createEvent<SyncStart>(EventCommon ec)
+SyncStart AsyncReceiver::createEvent<SyncStart>(EventCommon ec) const
 {
     return SyncStart{ec};
 }
 template <>
-SyncEnd AsyncReceiver::createEvent<SyncEnd>(EventCommon ec)
+SyncEnd AsyncReceiver::createEvent<SyncEnd>(EventCommon ec) const
 {
     return SyncEnd{ec};
 }
 template <>
-Started AsyncReceiver::createEvent<Started>(EventCommon ec)
+Started AsyncReceiver::createEvent<Started>(EventCommon ec) const
 {
     return Started{ec};
 }
 template <>
-Stopped AsyncReceiver::createEvent<Stopped>(EventCommon ec)
+Stopped AsyncReceiver::createEvent<Stopped>(EventCommon ec) const
 {
     return Stopped{ec};
 }
 template <>
 InputDeviceChanged
-AsyncReceiver::createEvent<InputDeviceChanged>(EventCommon ec)
+AsyncReceiver::createEvent<InputDeviceChanged>(EventCommon ec) const
 {
     return InputDeviceChanged{ec, getInputDevice()};
 }
 template <>
-GainStagesChanged AsyncReceiver::createEvent<GainStagesChanged>(EventCommon ec)
+GainStagesChanged
+AsyncReceiver::createEvent<GainStagesChanged>(EventCommon ec) const
 {
     return GainStagesChanged{ec, getGainStages()};
 }
 template <>
-AntennasChanged AsyncReceiver::createEvent<AntennasChanged>(EventCommon ec)
+AntennasChanged
+AsyncReceiver::createEvent<AntennasChanged>(EventCommon ec) const
 {
     return AntennasChanged{ec, getAntennas()};
 }
 template <>
-AntennaChanged AsyncReceiver::createEvent<AntennaChanged>(EventCommon ec)
+AntennaChanged AsyncReceiver::createEvent<AntennaChanged>(EventCommon ec) const
 {
     return AntennaChanged{ec, getAntenna()};
 }
 template <>
-RfFreqChanged AsyncReceiver::createEvent<RfFreqChanged>(EventCommon ec)
+RfFreqChanged AsyncReceiver::createEvent<RfFreqChanged>(EventCommon ec) const
 {
     return RfFreqChanged{ec, getRfFreq()};
 }
 template <>
-InputRateChanged AsyncReceiver::createEvent<InputRateChanged>(EventCommon ec)
+InputRateChanged
+AsyncReceiver::createEvent<InputRateChanged>(EventCommon ec) const
 {
     return InputRateChanged{ec, getInputRate()};
 }
 template <>
-InputDecimChanged AsyncReceiver::createEvent<InputDecimChanged>(EventCommon ec)
+InputDecimChanged
+AsyncReceiver::createEvent<InputDecimChanged>(EventCommon ec) const
 {
     return InputDecimChanged{ec, getInputDecim()};
 }
 template <>
-IqSwapChanged AsyncReceiver::createEvent<IqSwapChanged>(EventCommon ec)
+IqSwapChanged AsyncReceiver::createEvent<IqSwapChanged>(EventCommon ec) const
 {
     return IqSwapChanged{ec, getIqSwap()};
 }
 template <>
-DcCancelChanged AsyncReceiver::createEvent<DcCancelChanged>(EventCommon ec)
+DcCancelChanged
+AsyncReceiver::createEvent<DcCancelChanged>(EventCommon ec) const
 {
     return DcCancelChanged{ec, getDcCancel()};
 }
 template <>
-IqBalanceChanged AsyncReceiver::createEvent<IqBalanceChanged>(EventCommon ec)
+IqBalanceChanged
+AsyncReceiver::createEvent<IqBalanceChanged>(EventCommon ec) const
 {
     return IqBalanceChanged{ec, getIqBalance()};
 }
 template <>
-AutoGainChanged AsyncReceiver::createEvent<AutoGainChanged>(EventCommon ec)
+AutoGainChanged
+AsyncReceiver::createEvent<AutoGainChanged>(EventCommon ec) const
 {
     return AutoGainChanged{ec, getAutoGain()};
 }
 template <>
-FreqCorrChanged AsyncReceiver::createEvent<FreqCorrChanged>(EventCommon ec)
+FreqCorrChanged
+AsyncReceiver::createEvent<FreqCorrChanged>(EventCommon ec) const
 {
     return FreqCorrChanged{ec, getFreqCorr()};
 }
 template <>
-VfoAdded AsyncReceiver::createEvent<VfoAdded>(EventCommon ec, uint64_t handle)
+VfoAdded AsyncReceiver::createEvent<VfoAdded>(EventCommon ec,
+                                              uint64_t handle) const
 {
     return VfoAdded{ec, handle};
 }
 template <>
 VfoRemoved AsyncReceiver::createEvent<VfoRemoved>(EventCommon ec,
-                                                  uint64_t handle)
+                                                  uint64_t handle) const
 {
     return VfoRemoved{ec, handle};
 }
 template <>
 GainChanged AsyncReceiver::createEvent<GainChanged>(EventCommon ec,
                                                     std::string name,
-                                                    double value)
+                                                    double value) const
 {
     return GainChanged{ec, std::move(name), value};
 }
 template <>
 IqRecordingStarted
-AsyncReceiver::createEvent<IqRecordingStarted>(EventCommon ec)
+AsyncReceiver::createEvent<IqRecordingStarted>(EventCommon ec) const
 {
     return IqRecordingStarted{ec, iqRecordingPath()};
 }
 template <>
 IqRecordingStopped
-AsyncReceiver::createEvent<IqRecordingStopped>(EventCommon ec)
+AsyncReceiver::createEvent<IqRecordingStopped>(EventCommon ec) const
 {
     return IqRecordingStopped{ec};
 }
 template <>
-FftWindowChanged AsyncReceiver::createEvent<FftWindowChanged>(EventCommon ec)
+FftWindowChanged
+AsyncReceiver::createEvent<FftWindowChanged>(EventCommon ec) const
 {
     return FftWindowChanged{ec, getIqFftWindow()};
 }
 template <>
-FftSizeChanged AsyncReceiver::createEvent<FftSizeChanged>(EventCommon ec)
+FftSizeChanged AsyncReceiver::createEvent<FftSizeChanged>(EventCommon ec) const
 {
     return FftSizeChanged{ec, getIqFftSize()};
 }
@@ -485,13 +495,8 @@ void AsyncReceiver::getIqFftData(
         int64_t center_freq = rx->get_rf_freq();
         int sample_rate = (int)rx->get_quad_rate();
 
-        auto chrono_timestamp = system_clock::now().time_since_epoch();
+        Timestamp timestamp = Timestamp::Now();
 
-        uint64_t s = duration_cast<seconds>(chrono_timestamp).count();
-        auto remainder = chrono_timestamp - seconds(s);
-        uint32_t n = duration_cast<nanoseconds>(remainder).count();
-
-        Timestamp timestamp = Timestamp{s, n};
         CALLBACK_ON_SUCCESS(timestamp, center_freq, sample_rate, data, fftsize);
     });
 }
@@ -601,6 +606,52 @@ void AsyncReceiver::removeVfoChannel(uint64_t handle, Callback<> callback)
     });
 }
 
+std::vector<ReceiverEvent> AsyncReceiver::getStateAsEvents() const
+{
+    std::vector<ReceiverEvent> result;
+
+    forEachStateEvent(
+        [&](const ReceiverEvent& event) { result.push_back(event); });
+
+    return result;
+}
+
+template <typename Lambda>
+void AsyncReceiver::forEachStateEvent(Lambda&& lambda) const
+{
+    // FIXME: Maybe somehow keep track of when each state changed.
+    EventCommon ec{.id = -1, .timestamp = {}};
+
+    lambda(createEvent<InputDeviceChanged>(ec));
+    lambda(createEvent<AntennasChanged>(ec));
+    lambda(createEvent<AntennaChanged>(ec));
+    lambda(createEvent<InputRateChanged>(ec));
+    lambda(createEvent<InputDecimChanged>(ec));
+    lambda(createEvent<DcCancelChanged>(ec));
+    lambda(createEvent<IqBalanceChanged>(ec));
+    lambda(createEvent<IqSwapChanged>(ec));
+    lambda(createEvent<RfFreqChanged>(ec));
+    lambda(createEvent<GainStagesChanged>(ec));
+    lambda(createEvent<AutoGainChanged>(ec));
+    lambda(createEvent<FreqCorrChanged>(ec));
+    lambda(createEvent<FftSizeChanged>(ec));
+    lambda(createEvent<FftWindowChanged>(ec));
+
+    if (rx->is_running()) {
+        lambda(createEvent<Started>(ec));
+    } else {
+        lambda(createEvent<Stopped>(ec));
+    }
+
+    if (rx->is_iq_recording()) {
+        lambda(createEvent<IqRecordingStarted>(ec));
+    }
+
+    for (auto& vfo : vfos) {
+        lambda(createEvent<VfoAdded>(ec, vfo->getId()));
+    }
+}
+
 void AsyncReceiver::subscribe(ReceiverEventHandler handler,
                               Callback<Connection> callback)
 {
@@ -608,39 +659,10 @@ void AsyncReceiver::subscribe(ReceiverEventHandler handler,
               callback = std::move(callback)]() mutable {
         callback(violetrx::ErrorCode::OK, signalStateChanged.connect(handler));
 
-        EventCommon ec;
-        ec.id = -1;
-        ec.timestamp = {};
-
+        EventCommon ec{.id = -1, .timestamp = {}};
         handler(createEvent<SyncStart>(ec));
-        handler(createEvent<InputDeviceChanged>(ec));
-        handler(createEvent<AntennasChanged>(ec));
-        handler(createEvent<AntennaChanged>(ec));
-        handler(createEvent<InputRateChanged>(ec));
-        handler(createEvent<InputDecimChanged>(ec));
-        handler(createEvent<DcCancelChanged>(ec));
-        handler(createEvent<IqBalanceChanged>(ec));
-        handler(createEvent<IqSwapChanged>(ec));
-        handler(createEvent<RfFreqChanged>(ec));
-        handler(createEvent<GainStagesChanged>(ec));
-        handler(createEvent<AutoGainChanged>(ec));
-        handler(createEvent<FreqCorrChanged>(ec));
-        handler(createEvent<FftSizeChanged>(ec));
-        handler(createEvent<FftWindowChanged>(ec));
 
-        if (rx->is_running()) {
-            handler(createEvent<Started>(ec));
-        } else {
-            handler(createEvent<Stopped>(ec));
-        }
-
-        if (rx->is_iq_recording()) {
-            handler(createEvent<IqRecordingStarted>(ec));
-        }
-
-        for (auto& vfo : vfos) {
-            stateChanged<VfoAdded>(vfo->getId());
-        }
+        forEachStateEvent(handler);
 
         handler(createEvent<SyncEnd>(ec));
     });

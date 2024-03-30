@@ -1,10 +1,13 @@
 #ifndef VIOLET_RX_CLIENT_CALL_H
 #define VIOLET_RX_CLIENT_CALL_H
 
+#include <memory>
 #include <variant>
 
 #include <grpcpp/grpcpp.h>
+#include <grpcpp/support/client_callback.h>
 
+#include "async_core/events.h"
 #include "async_core/types.h"
 #include "receiver.pb.h"
 

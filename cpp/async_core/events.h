@@ -2,7 +2,6 @@
 #define CORE_EVENTS
 
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -20,7 +19,10 @@ struct EventCommon {
     int64_t id;
     Timestamp timestamp;
 
-    static EventCommon make() { return EventCommon{last_id++, now()}; }
+    static EventCommon make()
+    {
+        return EventCommon{last_id++, Timestamp::Now()};
+    }
 };
 
 struct VfoEventCommon : public EventCommon {
@@ -35,6 +37,8 @@ struct VfoEventCommon : public EventCommon {
 struct SyncStart : public EventCommon {
 };
 struct SyncEnd : public EventCommon {
+};
+struct Unsubscribed : public EventCommon {
 };
 struct Started : public EventCommon {
 };
@@ -193,13 +197,13 @@ struct AudioGainChanged : public VfoEventCommon {
 };
 
 using ReceiverEvent =
-    std::variant<SyncStart, SyncEnd, Started, Stopped, InputDeviceChanged,
-                 AntennaChanged, InputRateChanged, InputDecimChanged,
-                 IqSwapChanged, DcCancelChanged, IqBalanceChanged,
-                 RfFreqChanged, GainStagesChanged, AntennasChanged,
-                 AutoGainChanged, GainChanged, FreqCorrChanged, FftSizeChanged,
-                 FftWindowChanged, IqRecordingStarted, IqRecordingStopped,
-                 VfoAdded, VfoRemoved>;
+    std::variant<SyncStart, SyncEnd, Unsubscribed, Started, Stopped,
+                 InputDeviceChanged, AntennaChanged, InputRateChanged,
+                 InputDecimChanged, IqSwapChanged, DcCancelChanged,
+                 IqBalanceChanged, RfFreqChanged, GainStagesChanged,
+                 AntennasChanged, AutoGainChanged, GainChanged, FreqCorrChanged,
+                 FftSizeChanged, FftWindowChanged, IqRecordingStarted,
+                 IqRecordingStopped, VfoAdded, VfoRemoved>;
 
 using VfoEvent = std::variant<
     VfoSyncStart, VfoSyncEnd, DemodChanged, OffsetChanged, CwOffsetChanged,
@@ -212,19 +216,20 @@ using VfoEvent = std::variant<
     RdsDecoderStopped, RdsParserReset, AudioGainChanged, VfoRemoved>;
 
 using Event = std::variant<
-    SyncStart, SyncEnd, Started, Stopped, InputDeviceChanged, AntennaChanged,
-    InputRateChanged, InputDecimChanged, IqSwapChanged, DcCancelChanged,
-    IqBalanceChanged, RfFreqChanged, GainStagesChanged, AntennasChanged,
-    AutoGainChanged, GainChanged, FreqCorrChanged, FftSizeChanged,
-    FftWindowChanged, IqRecordingStarted, IqRecordingStopped, VfoAdded,
-    VfoRemoved, AudioGainChanged, VfoSyncStart, VfoSyncEnd, DemodChanged,
-    OffsetChanged, CwOffsetChanged, FilterChanged, NoiseBlankerOnChanged,
-    NoiseBlankerThresholdChanged, SqlLevelChanged, SqlAlphaChanged,
-    AgcOnChanged, AgcHangChanged, AgcThresholdChanged, AgcSlopeChanged,
-    AgcDecayChanged, AgcManualGainChanged, FmMaxDevChanged, FmDeemphChanged,
-    AmDcrChanged, AmSyncDcrChanged, AmSyncPllBwChanged, RecordingStarted,
-    RecordingStopped, SnifferStarted, SnifferStopped, UdpStreamingStarted,
-    UdpStreamingStopped, RdsDecoderStarted, RdsDecoderStopped, RdsParserReset>;
+    SyncStart, SyncEnd, Unsubscribed, Started, Stopped, InputDeviceChanged,
+    AntennaChanged, InputRateChanged, InputDecimChanged, IqSwapChanged,
+    DcCancelChanged, IqBalanceChanged, RfFreqChanged, GainStagesChanged,
+    AntennasChanged, AutoGainChanged, GainChanged, FreqCorrChanged,
+    FftSizeChanged, FftWindowChanged, IqRecordingStarted, IqRecordingStopped,
+    VfoAdded, VfoRemoved, AudioGainChanged, VfoSyncStart, VfoSyncEnd,
+    DemodChanged, OffsetChanged, CwOffsetChanged, FilterChanged,
+    NoiseBlankerOnChanged, NoiseBlankerThresholdChanged, SqlLevelChanged,
+    SqlAlphaChanged, AgcOnChanged, AgcHangChanged, AgcThresholdChanged,
+    AgcSlopeChanged, AgcDecayChanged, AgcManualGainChanged, FmMaxDevChanged,
+    FmDeemphChanged, AmDcrChanged, AmSyncDcrChanged, AmSyncPllBwChanged,
+    RecordingStarted, RecordingStopped, SnifferStarted, SnifferStopped,
+    UdpStreamingStarted, UdpStreamingStopped, RdsDecoderStarted,
+    RdsDecoderStopped, RdsParserReset>;
 
 inline constexpr bool IsReceiverEvent(const Event& event)
 {
@@ -246,36 +251,51 @@ inline constexpr bool IsVfoEvent(const Event& event)
         event);
 }
 
+inline constexpr Event ToGeneralEvent(ReceiverEvent event)
+{
+    return std::visit(
+        [](auto&& specific_event) -> Event { return specific_event; },
+        std::move(event));
+}
+
+inline constexpr Event ToGeneralEvent(VfoEvent event)
+{
+    return std::visit(
+        [](auto&& specific_event) -> Event { return specific_event; },
+        std::move(event));
+}
+
 inline constexpr std::optional<ReceiverEvent> ToReceiverEvent(Event event)
 {
     return std::visit(
-        [](const auto& specific_event) -> std::optional<ReceiverEvent> {
+        [](auto&& specific_event) -> std::optional<ReceiverEvent> {
             using EventType = std::decay_t<decltype(specific_event)>;
 
             if constexpr (std::is_convertible_v<EventType, ReceiverEvent>) {
-                return ReceiverEvent(specific_event);
+                return ReceiverEvent(std::move(specific_event));
             } else {
-                return {};
+                return std::nullopt;
             }
         },
-        event);
+        std::move(event));
 }
 
 inline constexpr std::optional<VfoEvent> ToVfoEvent(Event event)
 {
     return std::visit(
-        [](const auto& specific_event) -> std::optional<VfoEvent> {
+        [](auto&& specific_event) -> std::optional<VfoEvent> {
             using EventType = std::decay_t<decltype(specific_event)>;
 
             if constexpr (std::is_convertible_v<EventType, VfoEvent>) {
-                return VfoEvent(specific_event);
+                return VfoEvent(std::move(specific_event));
             } else {
-                return {};
+                return std::nullopt;
             }
         },
-        event);
+        std::move(event));
 }
 
+using EventHandler = fu2::function<void(const Event&)>;
 using ReceiverEventHandler = fu2::function<void(const ReceiverEvent&)>;
 using VfoEventHandler = fu2::function<void(const VfoEvent&)>;
 
