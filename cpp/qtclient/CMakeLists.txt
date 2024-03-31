@@ -138,6 +138,7 @@ PUBLIC
     PkgConfig::PC_SNDFILE
     bindable_properties
     async_core
+    grpc_client
 
 PRIVATE
     spdlog::spdlog

@@ -7,6 +7,7 @@
 #include <spdlog/spdlog.h>
 
 #include "async_core/events.h"
+#include "async_core/events_format.h"
 #include "client.h"
 #include "type_conversion.h"
 
@@ -22,15 +23,31 @@ namespace violetrx
                         std::move(status));                                    \
         })
 
-#define INVOKE(callback, ...)                                                  \
+// FIXME: Disgusting!
+#define INVOKE_CMD(cmd, callback, ...)                                         \
     if (callback) {                                                            \
         if (callback_thread_) {                                                \
-            callback_thread_->scheduleForced(                                  \
-                __func__, std::move(callback) __VA_OPT__(, ) __VA_ARGS__);     \
+            callback_thread_->scheduleForced(cmd, callback __VA_OPT__(, )      \
+                                                      __VA_ARGS__);            \
         } else {                                                               \
             callback(__VA_ARGS__);                                             \
         }                                                                      \
     }
+
+#define INVOKE_MOVE_CMD(cmd, callback, ...)                                    \
+    if (callback) {                                                            \
+        if (callback_thread_) {                                                \
+            callback_thread_->scheduleForced(                                  \
+                cmd, std::move(callback) __VA_OPT__(, ) __VA_ARGS__);          \
+        } else {                                                               \
+            callback(__VA_ARGS__);                                             \
+        }                                                                      \
+    }
+
+#define INVOKE(callback, ...) INVOKE_CMD(__func__, callback, __VA_ARGS__)
+
+#define INVOKE_MOVE(callback, ...)                                             \
+    INVOKE_CMD(__func__, std::move(callback), __VA_ARGS__)
 
 static constexpr int ALLOCATOR_CAPACITY = 16;
 
@@ -566,12 +583,12 @@ void GrpcClient::StartUdpStreaming(uint64_t, const std::string&, int, bool,
                                    Callback<> callback)
 {
     // TODO
-    INVOKE(callback, ErrorCode::UNIMPLEMENTED);
+    INVOKE_MOVE(callback, ErrorCode::UNIMPLEMENTED);
 }
 void GrpcClient::StopUdpStreaming(uint64_t, Callback<> callback)
 {
     // TODO
-    INVOKE(callback, ErrorCode::UNIMPLEMENTED);
+    INVOKE_MOVE(callback, ErrorCode::UNIMPLEMENTED);
 }
 void GrpcClient::StartSniffer(uint64_t handle, int samplerate, int buffsize,
                               Callback<> callback)
@@ -675,11 +692,11 @@ public:
         StartCall();
     }
 
-    void DeclareUnsubscription()
+    void DeclareUnsubscription(Unsubscribed event = {
+                                   {.id = -1, .timestamp = Timestamp::Now()}})
     {
         if (!unsubscribed_) {
-            INVOKE(callback_,
-                   Unsubscribed{{.id = -1, .timestamp = Timestamp::Now()}});
+            INVOKE_MOVE(callback_, event);
             unsubscribed_ = true;
         }
     }
@@ -695,8 +712,11 @@ public:
         if (maybe_event.has_value()) {
             const Event& event = *maybe_event;
 
+            spdlog::info("{} EventsReactor: {}", fmt::ptr(this), event);
+
             if (std::holds_alternative<Unsubscribed>(event)) {
-                DeclareUnsubscription();
+                DeclareUnsubscription(std::get<Unsubscribed>(event));
+                return;
             } else {
                 INVOKE(callback_, event);
             }
@@ -737,27 +757,33 @@ void GrpcClient::Subscribe(EventHandler callback)
 
 template <typename CallType>
 void GrpcClient::OnEmptyResponseCallDone(CallType& call,
-                                         const grpc::Status& status)
+                                         const grpc::Status& status,
+                                         std::source_location loc)
 {
     if (status.ok()) {
-        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()));
+        INVOKE_MOVE_CMD(loc.function_name(), call.callback,
+                        ErrorCodeProtoToCore(call.response.code()));
     } else {
         spdlog::error(status.error_message());
-        INVOKE(call.callback, ErrorCode::CALL_ERROR);
+        INVOKE_MOVE_CMD(loc.function_name(), call.callback,
+                        ErrorCode::CALL_ERROR);
     }
 }
 
 template <typename CallType>
 void GrpcClient::OnValueResponseCallDone(CallType& call,
-                                         const grpc::Status& status)
+                                         const grpc::Status& status,
+                                         std::source_location loc)
 {
     if (status.ok()) {
-        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-               call.response.value());
+        INVOKE_MOVE_CMD(loc.function_name(), call.callback,
+                        ErrorCodeProtoToCore(call.response.code()),
+                        call.response.value());
     } else {
         spdlog::error(status.error_message());
-        INVOKE(call.callback, ErrorCode::CALL_ERROR,
-               decltype(call.response.value()){});
+        INVOKE_MOVE_CMD(loc.function_name(), call.callback,
+                        ErrorCode::CALL_ERROR,
+                        decltype(call.response.value()){});
     }
 }
 
@@ -845,21 +871,21 @@ void GrpcClient::OnGetFftDataCallDone(GetFftDataCall& call,
                                       const grpc::Status& status)
 {
     if (!status.ok()) {
-        INVOKE(call.callback, ErrorCode::CALL_ERROR, Timestamp{}, 0, 0, nullptr,
-               0);
+        INVOKE_MOVE(call.callback, ErrorCode::CALL_ERROR, Timestamp{}, 0, 0,
+                    nullptr, 0);
         return;
     }
 
     if (call.response.code() != Receiver::ErrorCode::OK) {
-        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-               Timestamp{}, 0, 0, nullptr, 0);
+        INVOKE_MOVE(call.callback, ErrorCodeProtoToCore(call.response.code()),
+                    Timestamp{}, 0, 0, nullptr, 0);
     }
 
     const auto& proto_frame = call.response.fft_frame();
 
     if (proto_frame.data_size() > call.size) {
-        INVOKE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE, Timestamp{},
-               0, 0, nullptr, 0);
+        INVOKE_MOVE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE,
+                    Timestamp{}, 0, 0, nullptr, 0);
         return;
     }
 
@@ -870,19 +896,19 @@ void GrpcClient::OnGetFftDataCallDone(GetFftDataCall& call,
     std::memcpy(call.data, proto_frame.data().data(),
                 sizeof(float) * proto_frame.data_size());
 
-    INVOKE(call.callback, ErrorCode::OK, timestamp, center_freq, sample_rate,
-           call.data, proto_frame.data_size());
+    INVOKE_MOVE(call.callback, ErrorCode::OK, timestamp, center_freq,
+                sample_rate, call.data, proto_frame.data_size());
 }
 
 void GrpcClient::OnAddVfoChannelCallDone(AddVfoChannelCall& call,
                                          const grpc::Status& status)
 {
     if (status.ok()) {
-        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-               call.response.handle());
+        INVOKE_MOVE(call.callback, ErrorCodeProtoToCore(call.response.code()),
+                    call.response.handle());
     } else {
         spdlog::error(status.error_message());
-        INVOKE(call.callback, ErrorCode::CALL_ERROR, 0);
+        INVOKE_MOVE(call.callback, ErrorCode::CALL_ERROR, 0);
     }
 }
 
@@ -1010,27 +1036,27 @@ void GrpcClient::OnGetSnifferDataCallDone(GetSnifferDataCall& call,
                                           const grpc::Status& status)
 {
     if (!status.ok()) {
-        INVOKE(call.callback, ErrorCode::CALL_ERROR, call.data, 0);
+        INVOKE_MOVE(call.callback, ErrorCode::CALL_ERROR, call.data, 0);
         return;
     }
 
     if (call.response.code() != Receiver::ErrorCode::OK) {
-        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-               call.data, 0);
+        INVOKE_MOVE(call.callback, ErrorCodeProtoToCore(call.response.code()),
+                    call.data, 0);
     }
 
     const auto& proto_data = call.response.data();
 
     if (proto_data.size() > call.size) {
-        INVOKE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE, call.data,
-               0);
+        INVOKE_MOVE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE,
+                    call.data, 0);
         return;
     }
 
     std::memcpy(call.data, proto_data.data(),
                 sizeof(float) * proto_data.size());
 
-    INVOKE(call.callback, ErrorCode::OK, call.data, proto_data.size());
+    INVOKE_MOVE(call.callback, ErrorCode::OK, call.data, proto_data.size());
 }
 void GrpcClient::OnStartRdsDecoderCallDone(StartRdsDecoderCall& call,
                                            const grpc::Status& status)
@@ -1051,11 +1077,11 @@ void GrpcClient::OnGetRdsDataCallDone(GetRdsDataCall& call,
                                       const grpc::Status& status)
 {
     if (status.ok()) {
-        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-               call.response.data(), call.response.type());
+        INVOKE_MOVE(call.callback, ErrorCodeProtoToCore(call.response.code()),
+                    call.response.data(), call.response.type());
     } else {
         spdlog::error(status.error_message());
-        INVOKE(call.callback, ErrorCode::CALL_ERROR, std::string{}, 0);
+        INVOKE_MOVE(call.callback, ErrorCode::CALL_ERROR, std::string{}, 0);
     }
 }
 

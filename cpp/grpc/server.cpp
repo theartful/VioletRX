@@ -368,9 +368,11 @@ GrpcServer::GetFftData(grpc::CallbackServerContext* context,
         std::make_unique<Receiver::FftFrame>();
     fft_frame->mutable_data()->Reserve(fft_size);
 
+    float* data = fft_frame->mutable_data()->mutable_data();
+    int size = fft_frame->mutable_data()->Capacity();
+
     async_receiver_->getIqFftData(
-        fft_frame->mutable_data()->mutable_data(), // Data
-        fft_frame->mutable_data()->Capacity(),     // Size
+        data, size,
         // Callback
         [=, fft_frame = std::move(fft_frame)](
             ErrorCode err, Timestamp timestamp, int64_t center_freq,

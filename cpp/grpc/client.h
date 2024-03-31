@@ -2,6 +2,7 @@
 #define VIOLET_GRPC_CLIENT_H
 
 #include <memory>
+#include <source_location>
 #include <string>
 
 #include <bitmap_allocator.h>
@@ -103,10 +104,14 @@ private:
 
 private:
     template <typename CallType>
-    void OnEmptyResponseCallDone(CallType& call, const grpc::Status& status);
+    void OnEmptyResponseCallDone(
+        CallType& call, const grpc::Status& status,
+        std::source_location loc = std::source_location::current());
 
     template <typename CallType>
-    void OnValueResponseCallDone(CallType& call, const grpc::Status& status);
+    void OnValueResponseCallDone(
+        CallType& call, const grpc::Status& status,
+        std::source_location loc = std::source_location::current());
 
     void OnStartCallDone(StartCall& call, const grpc::Status& status);
     void OnStopCallDone(StopCall& call, const grpc::Status& status);

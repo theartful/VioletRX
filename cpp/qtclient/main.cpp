@@ -30,6 +30,8 @@
 #include <QStringList>
 #include <QtGlobal>
 
+#include <spdlog/spdlog.h>
+
 #include "mainwindow.h"
 
 #include <iostream>
@@ -39,6 +41,8 @@ static void list_conf();
 
 int main(int argc, char* argv[])
 {
+    spdlog::set_level(spdlog::level::debug);
+
     QString cfg_file;
     bool edit_conf = false;
     int return_code = 0;

@@ -63,9 +63,7 @@ void WorkerThread::start()
     thread = std::jthread(std::bind_front(&WorkerThread::startEventLoop, this));
 }
 
-bool WorkerThread::isJoinable() const {
-    return thread.joinable();
-}
+bool WorkerThread::isJoinable() const { return thread.joinable(); }
 
 std::chrono::microseconds WorkerThread::getAvgLatency()
 {
@@ -96,6 +94,7 @@ void WorkerThread::startEventLoop(std::stop_token stopToken)
             lastCmd = task.cmd;
 
             inTask = true;
+
             try {
                 task.func();
             } catch (const std::exception& e) {

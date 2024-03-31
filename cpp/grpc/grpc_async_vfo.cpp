@@ -461,6 +461,15 @@ void GrpcAsyncVfo::onEvent(const VfoEvent& event)
     }
 }
 
+void GrpcAsyncVfo::synchronize(Callback<> callback)
+{
+    schedule([callback = std::move(callback)]() mutable {
+        if (callback) {
+            callback(ErrorCode::OK);
+        }
+    });
+}
+
 GrpcAsyncVfo::~GrpcAsyncVfo() {}
 
 } // namespace violetrx

@@ -1,4 +1,5 @@
 #include "grpc_async_receiver.h"
+#include "async_core/events_format.h" // IWYU pragma: keep
 #include "grpc_async_vfo.h"
 #include "utility/assert.h"
 
@@ -38,7 +39,7 @@ GrpcAsyncReceiver::GrpcAsyncReceiver(std::string uri) :
     is_iq_recording_{false},
     vfos_{}
 {
-    client_->Subscribe([this](const Event& event) { onEvent(event); });
+    worker_thread_->start();
 }
 
 template <typename Function>
@@ -129,7 +130,8 @@ void GrpcAsyncReceiver::onReceiverEvent(const ReceiverEvent& event)
 
     signalStateChanged(event);
 
-    if (std::holds_alternative<Unsubscribed>(event)) {
+    is_subscribed_ = !std::holds_alternative<Unsubscribed>(event);
+    if (!is_subscribed_) {
         signalStateChanged.disconnect_all_slots();
         for (auto& vfo : vfos_) {
             vfo->signalStateChanged.disconnect_all_slots();
@@ -152,8 +154,6 @@ void GrpcAsyncReceiver::onVfoEvent(const VfoEvent& event)
 
 void GrpcAsyncReceiver::onEvent(const Event& event)
 {
-    is_subscribed_ = !std::holds_alternative<Unsubscribed>(event);
-
     if (IsReceiverEvent(event)) {
         // Extra copy here.
         auto receiver_event = ToReceiverEvent(event);
@@ -593,6 +593,15 @@ std::vector<ReceiverEvent> GrpcAsyncReceiver::getStateAsEvents() const
         [&](const ReceiverEvent& event) { result.push_back(event); });
 
     return result;
+}
+
+void GrpcAsyncReceiver::synchronize(Callback<> callback)
+{
+    schedule([callback = std::move(callback)]() mutable {
+        if (callback) {
+            callback(ErrorCode::OK);
+        }
+    });
 }
 
 GrpcAsyncReceiver::~GrpcAsyncReceiver() {}

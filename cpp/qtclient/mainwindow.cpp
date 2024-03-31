@@ -25,15 +25,6 @@
 #include <vector>
 #include <volk/volk.h>
 
-#include "bandplan.h"
-#include "core/receiver.h"
-#include "ioconfig.h"
-#include "mainwindow.h"
-#include "plotter/fftaverager.h"
-#include "plotter/vfographicsitem.h"
-#include "receiver_model.h"
-#include "vfoopt.h"
-#include "vfosopt.h"
 #include <QByteArray>
 #include <QDateTime>
 #include <QDesktopServices>
@@ -56,13 +47,19 @@
 #include <QVBoxLayout>
 #include <QtGlobal>
 
+#include "bandplan.h"
+#include "bookmarkstaglist.h"
+#include "grpc/grpc_async_receiver.h"
+#include "ioconfig.h"
+#include "mainwindow.h"
+#include "plotter/fftaverager.h"
+#include "plotter/vfographicsitem.h"
+#include "receiver_model.h"
+#include "vfoopt.h"
+#include "vfosopt.h"
+
 /* Qt Designer files */
 #include "ui_mainwindow.h"
-
-/* DSP */
-#include "core/receiver.h"
-
-#include "bookmarkstaglist.h"
 
 MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
                        QWidget* parent) :
@@ -95,7 +92,8 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
     ui->freqCtrl->setFrequency(144500000);
 
     /* create receiver object */
-    rxModel = new ReceiverModel(this);
+    rxModel = new ReceiverModel(
+        violetrx::GrpcAsyncReceiver::make("0.0.0.0:50050"), this);
     rxModel->subscribe();
 
     connectReceiver();

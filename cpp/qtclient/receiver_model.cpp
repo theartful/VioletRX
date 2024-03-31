@@ -1,5 +1,3 @@
-#include <QRandomGenerator>
-
 #include <algorithm>
 #include <chrono>
 #include <exception>
@@ -7,11 +5,16 @@
 #include <stdexcept>
 #include <variant>
 
+#include <QRandomGenerator>
+
+#include <spdlog/spdlog.h>
+
 #include "async_core/async_receiver.h"
 #include "async_core/async_receiver_iface.h"
 #include "async_core/async_vfo_iface.h"
 #include "async_core/error_codes.h"
 #include "async_core/events.h"
+#include "async_core/events_format.h"
 #include "async_core/types.h"
 #include "receiver_model.h"
 
@@ -72,6 +75,7 @@ void ReceiverModel::subscribe()
 {
     rx->subscribe(
         [this](const violetrx::ReceiverEvent& e) {
+            spdlog::info("ReceiverModel: {}", e);
             onStateChanged(static_cast<const void*>(&e));
         },
         [this](violetrx::ErrorCode err, violetrx::Connection connection) {
