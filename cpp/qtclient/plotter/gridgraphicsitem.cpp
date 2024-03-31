@@ -56,7 +56,7 @@ static inline qreal horizontalAdvance(const QFontMetrics& fm,
 void GridGraphicsItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*,
                              QWidget*)
 {
-    QTransform worldTransform = painter->transform();
+    QTransform worldTransform = painter->worldTransform();
 
     float scaleX = worldTransform.m11();
     float scaleY = -worldTransform.m22();
@@ -79,15 +79,15 @@ void GridGraphicsItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*,
 
     y_unit = pow2l * pow5l;
 
-    if (!scene() || scene()->views().empty()) {
-        // This should never happen, since this is a qgraphicsitem, so it should
-        // only be drawn on a qgraphicsview with a qgraphics scene
+    if (!scene() || scene()->views().isEmpty()) {
         return;
     }
 
     QGraphicsView* view = scene()->views()[0];
     QRect pixelViewport = QRect{QPoint{0, 0}, view->size()};
-    QRectF sceneViewport = worldTransform.inverted().mapRect(pixelViewport);
+    QRectF sceneViewport = QRectF{view->mapToScene(pixelViewport.topLeft()),
+                                  view->mapToScene(pixelViewport.bottomRight())}
+                               .normalized();
 
     const QFont& font = painter->font();
     QFontMetrics fm(font);
@@ -160,16 +160,19 @@ QRectF GridGraphicsItem::boundingRect() const { return cachedBoundingRect; }
 
 void GridGraphicsItem::updateBoundingRect()
 {
-    if (!scene() || scene()->views().isEmpty())
+    if (!scene() || scene()->views().isEmpty()) {
         return;
+    }
 
     prepareGeometryChange();
-    // FIXME: should be more general I guess and not assume that we use
-    // PlotterGraphicsView?
-    PlotterGraphicsView* view =
-        qobject_cast<PlotterGraphicsView*>(scene()->views().first());
 
-    cachedBoundingRect = view->getSceneViewport();
+    QGraphicsView* view = scene()->views()[0];
+    QRect pixelViewport = QRect{QPoint{0, 0}, view->size()};
+    QRectF sceneViewport = QRectF{view->mapToScene(pixelViewport.topLeft()),
+                                  view->mapToScene(pixelViewport.bottomRight())}
+                               .normalized();
+    cachedBoundingRect = sceneViewport;
+
     update();
 }
 
