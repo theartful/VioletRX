@@ -1,25 +1,32 @@
-#ifndef ASYNC_VFO
-#define ASYNC_VFO
+#ifndef VIOLETRX_GRPC_ASYNC_VFO_H
+#define VIOLETRX_GRPC_ASYNC_VFO_H
+
+#include <memory>
+#include <source_location>
+#include <string>
 
 #include "async_core/async_vfo_iface.h"
-#include "core/vfo_channel.h"
 
 namespace violetrx
 {
+
+class GrpcClient;
+class GrpcAsyncReceiver;
 class WorkerThread;
-class AsyncReceiver;
 
-class AsyncVfo : public AsyncVfoIface
+class GrpcAsyncVfo : public AsyncVfoIface
 {
-    friend AsyncReceiver;
+    friend GrpcAsyncReceiver;
 
 public:
-    using sptr = std::shared_ptr<AsyncVfo>;
+    using sptr = std::shared_ptr<GrpcAsyncVfo>;
 
 public:
-    static sptr make(vfo_channel::sptr, std::shared_ptr<WorkerThread>);
-    AsyncVfo(vfo_channel::sptr, std::shared_ptr<WorkerThread>);
-    ~AsyncVfo() override;
+    static sptr make(uint64_t handle, std::shared_ptr<GrpcClient>,
+                     std::shared_ptr<WorkerThread>);
+    GrpcAsyncVfo(uint64_t handle, std::shared_ptr<GrpcClient>,
+                 std::shared_ptr<WorkerThread>);
+    ~GrpcAsyncVfo() override;
 
     void subscribe(VfoEventHandler, Callback<Connection>) override;
     void unsubscribe(const Connection&) override;
@@ -79,8 +86,6 @@ public:
     void stopRdsDecoder(Callback<> = {}) override;
     void resetRdsParser(Callback<> = {}) override;
 
-    vfo_channel::sptr inner() { return vfo; }
-
     /* Sync API: getters can only be called inside a successful callback
      * function */
     void synchronize(Callback<>) override;
@@ -118,62 +123,82 @@ public:
     uint64_t getId() const override;
 
 private:
-    bool isValidFilter(int64_t low, int64_t high);
-    void setDefaultFilter();
     void prepareToDie(VfoRemoved);
+    void onEvent(const VfoEvent&);
 
 private:
     template <typename Function>
     auto schedule(Function&& func,
                   const std::source_location = std::source_location::current());
 
-    template <typename Event, typename... Args>
-    Event createEvent(VfoEventCommon, Args...) const;
-
-    template <typename Event, typename... Args>
-    void stateChanged(Args... args);
-
     template <typename Lambda>
     void forEachStateEvent(Lambda&&) const;
 
 private:
-    vfo_channel::sptr vfo;
-    std::shared_ptr<WorkerThread> workerThread;
+    uint64_t handle_;
+    std::shared_ptr<GrpcClient> client_;
+    std::shared_ptr<WorkerThread> worker_thread_;
 
-    Demod m_demod;
+    Demod demod_;
+
+    // Filter params
+    int32_t offset_;
+    int32_t cw_offset_;
+    FilterShape filter_shape_;
+    int32_t filter_low_;
+    int32_t filter_high_;
+
+    // Recording params
+    bool is_audio_recording_;
+    std::string recording_path_;
 
     // FM parameters
-    float m_fmMaxDev;
-    double m_fmDeemph;
+    float fm_maxdev_;
+    double fm_deemph_;
 
     // AM parameters
-    bool m_amDcr;
+    bool am_dcr_;
 
     // AM-Sync parameters
-    bool m_amSyncDcr;
-    float m_amSyncPllBw;
+    bool am_sync_dcr_;
+    float am_sync_pll_bw_;
 
     // agc
-    bool m_agcOn;
-    bool m_agcHang;
-    int m_agcThreshold;
-    int m_agcSlope;
-    int m_agcDecay;
-    int m_agcManualGain;
+    bool agc_on_;
+    bool agc_hang_;
+    int agc_threshold_;
+    int agc_slope_;
+    int agc_decay_;
+    int agc_manual_gain_;
 
     // squelch
-    double m_sqlLevel;
-    double m_sqlAlpha;
+    double sql_level_;
+    double sql_alpha_;
 
     // noise blanker
-    bool m_nb1On;
-    float m_nb1Threshold;
+    bool nb1_on_;
+    float nb1_threshold_;
 
-    bool m_nb2On;
-    float m_nb2Threshold;
+    bool nb2_on_;
+    float nb2_threshold_;
 
-    bool m_removed;
+    // sniffer
+    bool is_sniffing_;
+    int sniffer_sample_rate_;
+    int sniffer_buff_size_;
+
+    // udp streaming
+    bool is_udp_streaming_;
+    std::string udp_host_;
+    int udp_port_;
+    bool udp_stereo_;
+
+    // rds
+    bool is_rds_decoder_active_;
+
+    bool removed_;
 };
+
 } // namespace violetrx
 
-#endif
+#endif // VIOLETRX_GRPC_ASYNC_VFO_H

@@ -111,8 +111,39 @@ public:
     virtual std::vector<VfoEvent> getStateAsEvents() const = 0;
 
     virtual uint64_t getId() const = 0;
+
     // This doesn't seem right
-    virtual FilterRange getFilterRange(Demod d) const = 0;
+    virtual FilterRange getFilterRange(Demod d) const
+    {
+        switch (d) {
+        case Demod::OFF:
+            return FilterRange{0, 0, 0, 0, true};
+        case Demod::RAW:
+            return FilterRange{-40000, -200, 200, 40000, true};
+        case Demod::AM:
+            return FilterRange{-40000, -200, 200, 40000, true};
+        case Demod::AM_SYNC:
+            return FilterRange{-40000, -200, 200, 40000, true};
+        case Demod::LSB:
+            return FilterRange{-40000, -100, -5000, 0, false};
+        case Demod::USB:
+            return FilterRange{0, 5000, 100, 40000, false};
+        case Demod::CWL:
+            return FilterRange{-5000, -100, 100, 5000, true};
+        case Demod::CWU:
+            return FilterRange{-5000, -100, 100, 5000, true};
+        case Demod::NFM:
+            return FilterRange{-40000, -1000, 1000, 40000, true};
+        case Demod::WFM_MONO:
+            return FilterRange{-120000, -10000, 10000, 120000, true};
+        case Demod::WFM_STEREO:
+            return FilterRange{-120000, -10000, 10000, 120000, true};
+        case Demod::WFM_STEREO_OIRT:
+            return FilterRange{-120000, -10000, 10000, 120000, true};
+        default:
+            return FilterRange{0, 0, 0, 0, true};
+        }
+    }
 
 protected:
     Signal<void(const VfoEvent&)> signalStateChanged;

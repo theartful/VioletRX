@@ -94,10 +94,10 @@ public:
     virtual double getFreqCorr() const = 0;
     virtual int getIqFftSize() const = 0;
     virtual WindowType getIqFftWindow() const = 0;
-    virtual bool isIqFftWindowNormalized() const = 0;
     virtual std::vector<std::shared_ptr<AsyncVfoIface>> getVfos() const = 0;
     virtual AsyncVfoIfaceSptr getVfo(uint64_t handle) const = 0;
-    virtual std::string iqRecordingPath() const = 0;
+    virtual std::string getIqRecordingPath() const = 0;
+    virtual bool isIqRecording() const = 0;
     virtual std::vector<ReceiverEvent> getStateAsEvents() const = 0;
 
 protected:

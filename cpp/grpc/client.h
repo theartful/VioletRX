@@ -10,6 +10,7 @@
 #include "async_core/types.h"
 #include "client_call.h"
 #include "receiver.grpc.pb.h"
+#include "utility/worker_thread.h"
 
 namespace violetrx
 {
@@ -17,7 +18,8 @@ namespace violetrx
 class GrpcClient
 {
 public:
-    GrpcClient(const std::string& addr_url);
+    GrpcClient(const std::string& addr_url,
+               std::shared_ptr<WorkerThread> callback_thread = {});
     ~GrpcClient();
 
     void Start(Callback<> = {});
@@ -193,11 +195,10 @@ private:
 private:
     std::shared_ptr<Receiver::Rx::Stub> stub_;
 
-    struct ClientCallDeleter {
-    };
-
     AllocatorStorage storage_;
     Allocator allocator_;
+
+    std::shared_ptr<WorkerThread> callback_thread_;
 };
 
 } // namespace violetrx

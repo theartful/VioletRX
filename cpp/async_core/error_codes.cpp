@@ -46,6 +46,8 @@ const char* errorMsg(ErrorCode code)
         return "Rds already inactive";
     case CALL_ERROR:
         return "Function call error";
+    case UNIMPLEMENTED:
+        return "Unimplemented";
     case UNKNOWN_ERROR:
     default:
         return "Unknown error";

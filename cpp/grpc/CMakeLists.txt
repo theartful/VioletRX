@@ -71,6 +71,10 @@ grpc_client
     client.h
     client.cpp
     client_call.h
+    grpc_async_receiver.h
+    grpc_async_receiver.cpp
+    grpc_async_vfo.h
+    grpc_async_vfo.cpp
 )
 
 target_link_libraries(
@@ -81,6 +85,7 @@ PUBLIC
     async_core_iface
     spdlog::spdlog
     broadcast_queue
+    utility
 )
 
 add_library(

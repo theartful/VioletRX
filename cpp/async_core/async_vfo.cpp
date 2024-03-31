@@ -15,20 +15,22 @@
 namespace violetrx
 {
 
-#define CALLBACK_ON_ERROR(code)                                                \
-    if (callback) {                                                            \
-        invokeDefault(callback, code);                                         \
-    }
+#define INVOKE(callback, ...)                                                  \
+    do {                                                                       \
+        if (callback) {                                                        \
+            callback(__VA_ARGS__);                                             \
+        }                                                                      \
+    } while (false)
 
 #define CALLBACK_ON_SUCCESS(...)                                               \
-    if (callback) {                                                            \
-        callback(ErrorCode::OK __VA_OPT__(, ) __VA_ARGS__);                    \
-    }
+    INVOKE(callback, ErrorCode::OK __VA_OPT__(, ) __VA_ARGS__)
+
+#define CALLBACK_ON_ERROR(code) invokeDefault(callback, code)
 
 #define RETURN_IF_WORKER_BUSY()                                                \
     do {                                                                       \
         if (workerThread->isPaused()) {                                        \
-            CALLBACK_ON_ERROR(WORKER_BUSY);                                    \
+            CALLBACK_ON_ERROR(ErrorCode::WORKER_BUSY);                         \
             return;                                                            \
         }                                                                      \
     } while (0)
@@ -36,7 +38,9 @@ namespace violetrx
 template <typename... Args>
 void invokeDefault(Callback<Args...>& callback, ErrorCode code)
 {
-    callback(code, std::decay_t<Args>{}...);
+    if (callback) {
+        callback(code, std::decay_t<Args>{}...);
+    }
 }
 
 template <typename Event, typename... Args>
@@ -290,38 +294,6 @@ bool AsyncVfo::isValidFilter(int64_t low, int64_t high)
     return high >= low && low >= filterRange.lowMin &&
            low <= filterRange.lowMax && high >= filterRange.highMin &&
            high <= filterRange.highMax;
-}
-
-FilterRange AsyncVfo::getFilterRange(Demod d) const
-{
-    switch (d) {
-    case Demod::OFF:
-        return FilterRange{0, 0, 0, 0, true};
-    case Demod::RAW:
-        return FilterRange{-40000, -200, 200, 40000, true};
-    case Demod::AM:
-        return FilterRange{-40000, -200, 200, 40000, true};
-    case Demod::AM_SYNC:
-        return FilterRange{-40000, -200, 200, 40000, true};
-    case Demod::LSB:
-        return FilterRange{-40000, -100, -5000, 0, false};
-    case Demod::USB:
-        return FilterRange{0, 5000, 100, 40000, false};
-    case Demod::CWL:
-        return FilterRange{-5000, -100, 100, 5000, true};
-    case Demod::CWU:
-        return FilterRange{-5000, -100, 100, 5000, true};
-    case Demod::NFM:
-        return FilterRange{-40000, -1000, 1000, 40000, true};
-    case Demod::WFM_MONO:
-        return FilterRange{-120000, -10000, 10000, 120000, true};
-    case Demod::WFM_STEREO:
-        return FilterRange{-120000, -10000, 10000, 120000, true};
-    case Demod::WFM_STEREO_OIRT:
-        return FilterRange{-120000, -10000, 10000, 120000, true};
-    default:
-        return FilterRange{0, 0, 0, 0, true};
-    }
 }
 
 // FIXME: maybe receiver Filter type instead?
@@ -1006,18 +978,18 @@ UdpStreamParams AsyncVfo::getUdpStreamParams() const
 
 uint64_t AsyncVfo::getId() const { return (uint64_t)vfo.get(); }
 
-void AsyncVfo::prepareToDie()
+void AsyncVfo::prepareToDie(VfoRemoved event)
 {
     m_removed = true;
-    stateChanged<VfoRemoved>();
+    signalStateChanged(event);
+
+    signalStateChanged.disconnect_all_slots();
 }
 
 std::vector<VfoEvent> AsyncVfo::getStateAsEvents() const
 {
     std::vector<VfoEvent> result;
-
     forEachStateEvent([&](const VfoEvent& event) { result.push_back(event); });
-
     return result;
 }
 
@@ -1077,23 +1049,25 @@ void AsyncVfo::subscribe(VfoEventHandler handler, Callback<Connection> callback)
               callback = std::move(callback)]() mutable {
         auto sptr = self.lock();
         if (!sptr || sptr->m_removed) {
-            callback(violetrx::ErrorCode::VFO_NOT_FOUND, {});
+            INVOKE(callback, violetrx::ErrorCode::VFO_NOT_FOUND, {});
             return;
         }
 
-        callback(violetrx::ErrorCode::OK,
-                 sptr->signalStateChanged.connect(handler));
+        Connection connection =
+            handler ? sptr->signalStateChanged.connect(handler) : Connection{};
 
-        VfoEventCommon ec;
-        ec.id = -1;
-        ec.timestamp = {};
-        ec.handle = sptr->getId();
+        INVOKE(callback, violetrx::ErrorCode::OK, std::move(connection));
 
-        handler(sptr->createEvent<VfoSyncStart>(ec));
+        if (handler) {
+            VfoEventCommon ec;
+            ec.id = -1;
+            ec.timestamp = {};
+            ec.handle = sptr->getId();
 
-        sptr->forEachStateEvent(handler);
-
-        handler(sptr->createEvent<VfoSyncEnd>(ec));
+            handler(sptr->createEvent<VfoSyncStart>(ec));
+            sptr->forEachStateEvent(handler);
+            handler(sptr->createEvent<VfoSyncEnd>(ec));
+        }
     });
 }
 

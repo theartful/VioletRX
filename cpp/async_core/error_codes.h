@@ -27,6 +27,7 @@ enum ErrorCode : int {
     RDS_ALREADY_INACTIVE = 18,
     INVALID_NOISE_BLANKER_ID = 19,
     CALL_ERROR = 20,
+    UNIMPLEMENTED = 21,
     UNKNOWN_ERROR = 99999,
 };
 

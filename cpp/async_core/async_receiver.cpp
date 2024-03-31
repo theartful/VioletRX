@@ -16,6 +16,11 @@ namespace violetrx
 
 int64_t EventCommon::last_id = 0;
 
+#define INVOKE(callback, ...)                                                  \
+    if (callback) {                                                            \
+        callback(__VA_ARGS__);                                                 \
+    }
+
 #define CALLBACK_ON_ERROR(code)                                                \
     if (callback) {                                                            \
         invokeDefault(callback, code);                                         \
@@ -159,7 +164,7 @@ template <>
 IqRecordingStarted
 AsyncReceiver::createEvent<IqRecordingStarted>(EventCommon ec) const
 {
-    return IqRecordingStarted{ec, iqRecordingPath()};
+    return IqRecordingStarted{ec, getIqRecordingPath()};
 }
 template <>
 IqRecordingStopped
@@ -565,12 +570,17 @@ void AsyncReceiver::removeVfoChannelImpl(AsyncVfo::sptr vfo,
 
     rx->remove_vfo_channel(vfo->inner());
 
-    vfo->prepareToDie();
+    auto vfo_removed_event =
+        createEvent<VfoRemoved>(EventCommon::make(), vfo->getId());
+
     CALLBACK_ON_SUCCESS();
 
-    stateChanged<VfoRemoved>(vfo->getId());
-
     vfos.erase(it);
+
+    // Emit the same event with the same ID from the receiver and the vfo
+    // itself.
+    vfo->prepareToDie(vfo_removed_event);
+    signalStateChanged(vfo_removed_event);
 }
 
 void AsyncReceiver::removeVfoChannel(AsyncVfoIfaceSptr vfoIface,
@@ -637,13 +647,13 @@ void AsyncReceiver::forEachStateEvent(Lambda&& lambda) const
     lambda(createEvent<FftSizeChanged>(ec));
     lambda(createEvent<FftWindowChanged>(ec));
 
-    if (rx->is_running()) {
+    if (isRunning()) {
         lambda(createEvent<Started>(ec));
     } else {
         lambda(createEvent<Stopped>(ec));
     }
 
-    if (rx->is_iq_recording()) {
+    if (isIqRecording()) {
         lambda(createEvent<IqRecordingStarted>(ec));
     }
 
@@ -657,14 +667,17 @@ void AsyncReceiver::subscribe(ReceiverEventHandler handler,
 {
     schedule([this, handler = std::move(handler),
               callback = std::move(callback)]() mutable {
-        callback(violetrx::ErrorCode::OK, signalStateChanged.connect(handler));
+        Connection connection =
+            handler ? signalStateChanged.connect(handler) : Connection{};
+        INVOKE(callback, violetrx::ErrorCode::OK, std::move(connection));
 
-        EventCommon ec{.id = -1, .timestamp = {}};
-        handler(createEvent<SyncStart>(ec));
+        if (handler) {
+            EventCommon ec{.id = -1, .timestamp = {}};
 
-        forEachStateEvent(handler);
-
-        handler(createEvent<SyncEnd>(ec));
+            handler(createEvent<SyncStart>(ec));
+            forEachStateEvent(handler);
+            handler(createEvent<SyncEnd>(ec));
+        }
     });
 }
 
@@ -679,6 +692,8 @@ void AsyncReceiver::synchronize(Callback<> callback)
 }
 
 bool AsyncReceiver::isRunning() const { return rx->is_running(); }
+
+bool AsyncReceiver::isIqRecording() const { return rx->is_iq_recording(); }
 
 std::string AsyncReceiver::getInputDevice() const
 {
@@ -721,10 +736,6 @@ WindowType AsyncReceiver::getIqFftWindow() const
 {
     return (WindowType)rx->get_iq_fft_window();
 }
-bool AsyncReceiver::isIqFftWindowNormalized() const
-{
-    return rx->is_iq_fft_window_normalized();
-}
 std::vector<std::shared_ptr<AsyncVfoIface>> AsyncReceiver::getVfos() const
 {
     std::vector<std::shared_ptr<AsyncVfoIface>> result;
@@ -744,7 +755,7 @@ AsyncVfoIfaceSptr AsyncReceiver::getVfo(uint64_t handle) const
     return {};
 }
 
-std::string AsyncReceiver::iqRecordingPath() const
+std::string AsyncReceiver::getIqRecordingPath() const
 {
     return rx->get_iq_filename();
 }

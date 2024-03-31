@@ -118,6 +118,10 @@ struct FilterChanged : public VfoEventCommon {
     int32_t high;
 
     Filter filter() const { return Filter{shape, low, high}; }
+    static FilterChanged fromFilter(VfoEventCommon ec, Filter filter)
+    {
+        return FilterChanged{ec, filter.shape, filter.low, filter.high};
+    }
 };
 struct NoiseBlankerOnChanged : public VfoEventCommon {
     int nb_id;

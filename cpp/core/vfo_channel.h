@@ -1,7 +1,6 @@
 #ifndef VFO_CHANNEL
 #define VFO_CHANNEL
 
-#include <chrono>
 #include <gnuradio/blocks/file_sink.h>
 #include <gnuradio/blocks/multiply_const.h>
 #include <gnuradio/blocks/null_sink.h>

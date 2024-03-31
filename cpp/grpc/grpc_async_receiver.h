@@ -1,26 +1,26 @@
-#ifndef ASYNC_RECEIVER_H
-#define ASYNC_RECEIVER_H
+#ifndef VIOLET_RX_GRPC_ASYNC_RECEIVER_H
+#define VIOLET_RX_GRPC_ASYNC_RECEIVER_H
 
 #include <memory>
-
 #include <source_location>
+#include <string>
+#include <vector>
 
-#include "async_core/async_receiver_iface.h"
-#include "async_core/events.h"
-#include "core/receiver.h"
+#include "async_core/async_receiver.h"
+#include "grpc/client.h"
+#include "utility/worker_thread.h"
 
 namespace violetrx
 {
-class WorkerThread;
 
-class AsyncVfo;
+class GrpcAsyncVfo;
 
-class AsyncReceiver : public AsyncReceiverIface
+class GrpcAsyncReceiver : public AsyncReceiverIface
 {
 public:
-    static sptr make();
-    AsyncReceiver();
-    ~AsyncReceiver() override;
+    static sptr make(std::string uri);
+    GrpcAsyncReceiver(std::string uri);
+    ~GrpcAsyncReceiver() override;
 
     void subscribe(ReceiverEventHandler, Callback<Connection>) override;
     void unsubscribe(const Connection&) override;
@@ -31,10 +31,10 @@ public:
     void setAntenna(std::string, Callback<> = {}) override;
     void setInputRate(int, Callback<int> = {}) override;
     void setInputDecim(int, Callback<int> = {}) override;
-    void setRfFreq(int64_t, Callback<int64_t> = {}) override;
     void setIqSwap(bool, Callback<> = {}) override;
     void setDcCancel(bool, Callback<> = {}) override;
     void setIqBalance(bool, Callback<> = {}) override;
+    void setRfFreq(int64_t, Callback<int64_t> = {}) override;
     void setAutoGain(bool, Callback<> = {}) override;
     void setGain(std::string, double, Callback<double> = {}) override;
     void setFreqCorr(double, Callback<double> = {}) override;
@@ -84,23 +84,46 @@ private:
     auto schedule(Function&& func,
                   const std::source_location = std::source_location::current());
 
-    template <typename Event, typename... Args>
-    Event createEvent(EventCommon, Args...) const;
-
-    template <typename Event, typename... Args>
-    void stateChanged(Args... args);
-
-    void removeVfoChannelImpl(std::shared_ptr<AsyncVfo>, Callback<>);
-
     template <typename Lambda>
     void forEachStateEvent(Lambda&&) const;
 
+    AsyncVfoIfaceSptr addVfoIfDoesntExist(uint64_t handle);
+    std::shared_ptr<GrpcAsyncVfo> removeVfoIfExists(uint64_t handle);
+
+    void onEvent(const Event& event);
+    void onReceiverEvent(const ReceiverEvent& event);
+    void onVfoEvent(const VfoEvent& event);
+
+    std::shared_ptr<GrpcAsyncVfo> getVfoImpl(uint64_t handle) const;
+
 private:
-    receiver::sptr rx;
-    std::vector<std::shared_ptr<AsyncVfo>> vfos;
-    std::shared_ptr<WorkerThread> workerThread;
+    // All callbacks will be called from this thread.
+    std::shared_ptr<WorkerThread> worker_thread_;
+    std::shared_ptr<GrpcClient> client_;
+
+    // State
+    bool is_subscribed_;
+    bool is_running_;
+    std::string input_device_;
+    std::string current_antenna_;
+    std::vector<std::string> antennas_;
+    int input_rate_;
+    int input_decim_;
+    bool dc_cancel_;
+    bool iq_balance_;
+    bool iq_swap_;
+    int64_t rf_freq_;
+    std::vector<GainStage> gain_stages_;
+    bool auto_gain_;
+    double freq_corr_;
+    int iq_fft_size_;
+    WindowType iq_fft_window_;
+    std::string iq_recording_path_;
+    bool is_iq_recording_;
+
+    std::vector<std::shared_ptr<GrpcAsyncVfo>> vfos_;
 };
 
 } // namespace violetrx
 
-#endif
+#endif // VIOLET_RX_GRPC_ASYNC_RECEIVER_H

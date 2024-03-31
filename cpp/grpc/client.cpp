@@ -24,17 +24,25 @@ namespace violetrx
 
 #define INVOKE(callback, ...)                                                  \
     if (callback) {                                                            \
-        callback(__VA_ARGS__);                                                 \
+        if (callback_thread_) {                                                \
+            callback_thread_->scheduleForced(                                  \
+                __func__, std::move(callback) __VA_OPT__(, ) __VA_ARGS__);     \
+        } else {                                                               \
+            callback(__VA_ARGS__);                                             \
+        }                                                                      \
     }
 
 static constexpr int ALLOCATOR_CAPACITY = 16;
 
-GrpcClient::GrpcClient(const std::string& addr_url) :
+GrpcClient::GrpcClient(const std::string& addr_url,
+                       std::shared_ptr<WorkerThread> callback_thread) :
     storage_{broadcast_queue::bitmap_allocator_storage::create<ClientCall>(
         ALLOCATOR_CAPACITY)},
-    allocator_{&storage_}
+    allocator_{&storage_},
+    callback_thread_{std::move(callback_thread)}
 
 {
+    // Unlimited message size. This is scary!
     grpc::ChannelArguments ch_args;
     ch_args.SetMaxReceiveMessageSize(-1);
 
@@ -96,7 +104,7 @@ void GrpcClient::SetAntenna(std::string antenna, Callback<> callback)
     auto [call, data] = Allocate<SetAntennaCall>();
 
     data.callback = std::move(callback);
-    data.request.set_value(antenna);
+    data.request.set_value(std::move(antenna));
 
     stub_->async()->SetAntenna(
         &data.context, &data.request, &data.response,
@@ -555,13 +563,15 @@ void GrpcClient::StopAudioRecording(uint64_t handle, Callback<> callback)
         WRAP(data, call, &GrpcClient::OnStopAudioRecordingCallDone));
 }
 void GrpcClient::StartUdpStreaming(uint64_t, const std::string&, int, bool,
-                                   Callback<>)
+                                   Callback<> callback)
 {
     // TODO
+    INVOKE(callback, ErrorCode::UNIMPLEMENTED);
 }
-void GrpcClient::StopUdpStreaming(uint64_t, Callback<>)
+void GrpcClient::StopUdpStreaming(uint64_t, Callback<> callback)
 {
     // TODO
+    INVOKE(callback, ErrorCode::UNIMPLEMENTED);
 }
 void GrpcClient::StartSniffer(uint64_t handle, int samplerate, int buffsize,
                               Callback<> callback)
@@ -653,8 +663,10 @@ class GrpcClient::EventsReactor
 {
 public:
     EventsReactor(std::shared_ptr<Receiver::Rx::Stub> stub,
-                  EventHandler callback) :
+                  EventHandler callback,
+                  std::shared_ptr<WorkerThread> callback_thread) :
         stub_{std::move(stub)},
+        callback_thread_{std::move(callback_thread)},
         callback_{std::move(callback)},
         unsubscribed_{false}
     {
@@ -666,7 +678,8 @@ public:
     void DeclareUnsubscription()
     {
         if (!unsubscribed_) {
-            callback_(Unsubscribed{{.id = -1, .timestamp = Timestamp::Now()}});
+            INVOKE(callback_,
+                   Unsubscribed{{.id = -1, .timestamp = Timestamp::Now()}});
             unsubscribed_ = true;
         }
     }
@@ -685,7 +698,7 @@ public:
             if (std::holds_alternative<Unsubscribed>(event)) {
                 DeclareUnsubscription();
             } else {
-                callback_(event);
+                INVOKE(callback_, event);
             }
         } else {
             spdlog::error(
@@ -711,6 +724,7 @@ private:
     google::protobuf::Empty request_;
     Receiver::Event response_;
 
+    std::shared_ptr<WorkerThread> callback_thread_;
     EventHandler callback_;
 
     bool unsubscribed_;
@@ -718,7 +732,7 @@ private:
 
 void GrpcClient::Subscribe(EventHandler callback)
 {
-    new EventsReactor(stub_, std::move(callback));
+    new EventsReactor(stub_, std::move(callback), callback_thread_);
 }
 
 template <typename CallType>
@@ -742,7 +756,8 @@ void GrpcClient::OnValueResponseCallDone(CallType& call,
                call.response.value());
     } else {
         spdlog::error(status.error_message());
-        INVOKE(call.callback, ErrorCode::CALL_ERROR, {});
+        INVOKE(call.callback, ErrorCode::CALL_ERROR,
+               decltype(call.response.value()){});
     }
 }
 
@@ -995,19 +1010,20 @@ void GrpcClient::OnGetSnifferDataCallDone(GetSnifferDataCall& call,
                                           const grpc::Status& status)
 {
     if (!status.ok()) {
-        INVOKE(call.callback, ErrorCode::CALL_ERROR, nullptr, 0);
+        INVOKE(call.callback, ErrorCode::CALL_ERROR, call.data, 0);
         return;
     }
 
     if (call.response.code() != Receiver::ErrorCode::OK) {
         INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-               nullptr, 0);
+               call.data, 0);
     }
 
     const auto& proto_data = call.response.data();
 
     if (proto_data.size() > call.size) {
-        INVOKE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE, nullptr, 0);
+        INVOKE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE, call.data,
+               0);
         return;
     }
 
@@ -1039,7 +1055,7 @@ void GrpcClient::OnGetRdsDataCallDone(GetRdsDataCall& call,
                call.response.data(), call.response.type());
     } else {
         spdlog::error(status.error_message());
-        INVOKE(call.callback, ErrorCode::CALL_ERROR, {}, 0);
+        INVOKE(call.callback, ErrorCode::CALL_ERROR, std::string{}, 0);
     }
 }
 
