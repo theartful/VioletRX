@@ -36,7 +36,6 @@ public:
     void updateBoundingRect();
 
 protected:
-    QRectF viewportRect(QPainter*) const;
     bool contains(const QPointF& point) const override;
 
 private:

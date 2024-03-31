@@ -2,7 +2,6 @@
 #include "plottergraphicsview.h"
 
 #include <cmath>
-#include <limits>
 
 #include <QGraphicsView>
 #include <QPainter>
@@ -57,9 +56,8 @@ static inline qreal horizontalAdvance(const QFontMetrics& fm,
 void GridGraphicsItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*,
                              QWidget*)
 {
-    painter->save();
-
     QTransform worldTransform = painter->transform();
+
     float scaleX = worldTransform.m11();
     float scaleY = -worldTransform.m22();
 
@@ -81,8 +79,15 @@ void GridGraphicsItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*,
 
     y_unit = pow2l * pow5l;
 
-    QRect pixelViewport = painter->viewport();
-    QRectF sceneViewport = viewportRect(painter);
+    if (!scene() || scene()->views().empty()) {
+        // This should never happen, since this is a qgraphicsitem, so it should
+        // only be drawn on a qgraphicsview with a qgraphics scene
+        return;
+    }
+
+    QGraphicsView* view = scene()->views()[0];
+    QRect pixelViewport = QRect{QPoint{0, 0}, view->size()};
+    QRectF sceneViewport = worldTransform.inverted().mapRect(pixelViewport);
 
     const QFont& font = painter->font();
     QFontMetrics fm(font);
@@ -104,6 +109,8 @@ void GridGraphicsItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*,
     for (qreal y = top; y < sceneViewport.bottom(); y += y_unit)
         linesY.append(QLineF(sceneViewport.left() + marginX, y,
                              sceneViewport.right(), y));
+
+    painter->save();
 
     // set up the painter
     QPen gridPen;
@@ -164,12 +171,6 @@ void GridGraphicsItem::updateBoundingRect()
 
     cachedBoundingRect = view->getSceneViewport();
     update();
-}
-
-QRectF GridGraphicsItem::viewportRect(QPainter* painter) const
-{
-    QRectF pixelViewport = painter->viewport();
-    return painter->transform().inverted().mapRect(pixelViewport);
 }
 
 bool GridGraphicsItem::contains(const QPointF&) const { return true; }

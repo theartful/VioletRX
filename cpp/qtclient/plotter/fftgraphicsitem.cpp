@@ -77,6 +77,7 @@ void FFTGraphicsItem::draw()
         pixmap.height() < view->size().height()) {
         pixmap = QPixmap{view->size()};
     }
+
     pixmap.fill(QColorConstants::Transparent);
 
     QPainter painter{&pixmap};

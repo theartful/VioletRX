@@ -75,7 +75,6 @@ void ReceiverModel::subscribe()
 {
     rx->subscribe(
         [this](const violetrx::ReceiverEvent& e) {
-            spdlog::info("ReceiverModel: {}", e);
             onStateChanged(static_cast<const void*>(&e));
         },
         [this](violetrx::ErrorCode err, violetrx::Connection connection) {

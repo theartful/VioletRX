@@ -92,8 +92,7 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
     ui->freqCtrl->setFrequency(144500000);
 
     /* create receiver object */
-    rxModel = new ReceiverModel(
-        violetrx::GrpcAsyncReceiver::make("0.0.0.0:50050"), this);
+    rxModel = new ReceiverModel(this);
     rxModel->subscribe();
 
     connectReceiver();
