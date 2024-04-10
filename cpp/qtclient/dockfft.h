@@ -26,9 +26,12 @@
 #include <QDockWidget>
 #include <QSettings>
 
-namespace Ui {
-    class DockFft;
+namespace Ui
+{
+class DockFft;
 }
+
+class ReceiverModel;
 
 /*! \brief Dock widget with FFT settings. */
 class DockFft : public QDockWidget
@@ -36,7 +39,7 @@ class DockFft : public QDockWidget
     Q_OBJECT
 
 public:
-    explicit DockFft(QWidget *parent = 0);
+    explicit DockFft(ReceiverModel* model, QWidget* parent = 0);
     ~DockFft();
 
     int fftRate();
@@ -50,29 +53,30 @@ public:
 
     void setSampleRate(float sample_rate);
 
-    void saveSettings(QSettings *settings);
-    void readSettings(QSettings *settings);
-
 signals:
-    void fftSizeChanged(int size);                 /*! FFT size changed. */
-    void fftRateChanged(int fps);                  /*! FFT rate changed. */
-    void fftWindowChanged(int window);             /*! FFT window type changed */
-    void displayDbmChanged(int state);             /*! Whether to show dBm/Hz.*/
-    void wfSpanChanged(quint64 span_ms);           /*! Waterfall span changed. */
-    void fftZoomChanged(float level);              /*! Zoom level slider changed. */
-    void plotScaleChanged(int value, bool useHz);  /*! 2D plot scale (FS/V/DBM) or (RBW/Hz) changed. */
-    void fftAvgChanged(float gain);                /*! FFT video filter gain has changed. */
+    void fftSizeChanged(int size);       /*! FFT size changed. */
+    void fftRateChanged(int fps);        /*! FFT rate changed. */
+    void fftWindowChanged(int window);   /*! FFT window type changed */
+    void displayDbmChanged(int state);   /*! Whether to show dBm/Hz.*/
+    void wfSpanChanged(quint64 span_ms); /*! Waterfall span changed. */
+    void fftZoomChanged(float level);    /*! Zoom level slider changed. */
+    void plotScaleChanged(
+        int value,
+        bool useHz); /*! 2D plot scale (FS/V/DBM) or (RBW/Hz) changed. */
+    void fftAvgChanged(float gain); /*! FFT video filter gain has changed. */
     void pandapterRangeChanged(float min, float max);
     void waterfallRangeChanged(float min, float max);
-    void resetFftZoom(void);                       /*! FFT zoom reset. */
-    void gotoFftCenter(void);                      /*! Go to FFT center. */
-    void fftColorChanged(const QColor &);          /*! FFT color has changed. */
-    void fftFillToggled(bool fill);                /*! Toggle filling area under FFT plot. */
-    void fftMaxHoldToggled(bool enable);           /*! Toggle max hold in FFT area. */
-    void fftMinHoldToggled(bool enable);           /*! Toggle min hold in FFT area. */
-    void bandPlanChanged(bool enabled);            /*! Toggle Band Plan at bottom of FFT area. */
-    void markersChanged(bool enabled);             /*! Toggle markers and on-plot controls. */
-    void wfColormapChanged(const QString &cmap);
+    void resetFftZoom(void);             /*! FFT zoom reset. */
+    void gotoFftCenter(void);            /*! Go to FFT center. */
+    void fftColorChanged(const QColor&); /*! FFT color has changed. */
+    void fftFillToggled(bool fill); /*! Toggle filling area under FFT plot. */
+    void fftMaxHoldToggled(bool enable); /*! Toggle max hold in FFT area. */
+    void fftMinHoldToggled(bool enable); /*! Toggle min hold in FFT area. */
+    void bandPlanChanged(
+        bool enabled); /*! Toggle Band Plan at bottom of FFT area. */
+    void
+    markersChanged(bool enabled); /*! Toggle markers and on-plot controls. */
+    void wfColormapChanged(const QString& cmap);
 
 public slots:
     void setPandapterRange(float min, float max);
@@ -94,7 +98,7 @@ private slots:
     void on_wfRangeSlider_valuesChanged(int min, int max);
     void on_resetButton_clicked(void);
     void on_centerButton_clicked(void);
-    void on_colorPicker_colorChanged(const QColor &);
+    void on_colorPicker_colorChanged(const QColor&);
     void on_fillCheckBox_stateChanged(int state);
     void on_maxHoldCheckBox_stateChanged(int state);
     void on_minHoldCheckBox_stateChanged(int state);
@@ -105,13 +109,13 @@ private:
     void updateInfoLabels(void);
 
 private:
-    Ui::DockFft   * ui;
-//    float         m_maximumFftDb;
-//    float         m_minimumFftDb;
-    float         m_sample_rate;
-    bool          m_pand_last_modified; /* Flag to indicate which slider was changed last */
-    float         m_actual_frame_rate;
-    bool          m_frame_dropping;
+    Ui::DockFft* ui;
+    ReceiverModel* m_model;
+    float m_sample_rate;
+    bool m_pand_last_modified; /* Flag to indicate which slider was changed last
+                                */
+    float m_actual_frame_rate;
+    bool m_frame_dropping;
 };
 
 #endif // DOCKFFT_H

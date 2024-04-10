@@ -1,7 +1,5 @@
 #include <algorithm>
 
-#include "qtclient/bookmarks.h"
-
 #include "bookmarksgraphicsitem.h"
 #include "fftgraphicsitem.h"
 #include "gridgraphicsitem.h"
@@ -449,7 +447,6 @@ void Plotter::setCenterFreq(qint64 centerFreq_)
 
 void Plotter::setSampleRate(qint64 sampleRate_)
 {
-    // FIXME: should probably use some sort of fequals
     if (sampleRate == sampleRate_)
         return;
 
@@ -569,10 +566,9 @@ void Plotter::refreshBookmarks()
     if (!bookmarksEnabled)
         return;
 
-    QList<BookmarkInfo> items =
-        Bookmarks::Get().getBookmarksInRange(freqFrom(), freqTo());
-
-    bookmarks->setBookmarks(items);
+    // QList<BookmarkInfo> items =
+    //     Bookmarks::Get().getBookmarksInRange(freqFrom(), freqTo());
+    // bookmarks->setBookmarks(items);
 }
 
 qint64 Plotter::freqFrom() { return centerFreq - sampleRate / 2.0; }
@@ -587,7 +583,7 @@ Plotter::~Plotter()
     }
     eventFilters.clear();
 
-    // not really necessary since the scene will be automatically delete, and
+    // not really necessary since the scene will be automatically deleted, and
     // it will delete all associated qgraphicsitems
     for (auto& vfo : vfos) {
         delete vfo;

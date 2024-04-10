@@ -555,31 +555,6 @@
               </property>
               <item>
                <property name="text">
-                <string>250 fps</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>200 fps</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>166 fps</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>140 fps</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>125 fps</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
                 <string>100 fps</string>
                </property>
               </item>

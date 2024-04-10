@@ -31,7 +31,6 @@
 #include <QLabel>
 #include <QList>
 #include <QMap>
-#include <QSettings>
 #include <QSlider>
 #include <QString>
 #include <QVariant>
@@ -67,11 +66,6 @@ public:
     explicit DockInputCtl(ReceiverModel* rxModel, QWidget* parent = 0);
     ~DockInputCtl();
 
-    void readSettings(QSettings* settings);
-    void saveSettings(QSettings* settings);
-
-    void readLnbLoFromSettings(QSettings* settings);
-
     double gain(QString& name);
 
     void setAgc(bool enabled);
@@ -94,7 +88,7 @@ public:
 
     void setAntenna(const QString& antenna);
 
-    void setGainStages(QList<GainStage> gain_list);
+    void setGainStages(const QList<GainStage>& gain_list);
 
 private slots:
     void onGainChanged(QString name, double value);
@@ -126,7 +120,6 @@ private slots:
 private:
     void clearWidgets();
     void updateLabel(int idx, double value);
-    void getGains(QMap<QString, QVariant>* gains);
     void setGains(QMap<QString, QVariant>* gains);
 
 private:

@@ -22,6 +22,7 @@ public:
     AsyncReceiver();
     ~AsyncReceiver() override;
 
+    void getDevices(Callback<std::vector<Device>>) const override;
     void subscribe(ReceiverEventHandler, Callback<Connection>) override;
     void unsubscribe(const Connection&) override;
 
@@ -79,10 +80,16 @@ public:
     bool isIqRecording() const override;
     std::vector<ReceiverEvent> getStateAsEvents() const override;
 
+    bool isRemote() const override { return false; }
+
 private:
     template <typename Function>
     auto schedule(Function&& func,
                   const std::source_location = std::source_location::current());
+
+    template <typename Function>
+    auto schedule(Function&& func, const std::source_location =
+                                       std::source_location::current()) const;
 
     template <typename Event, typename... Args>
     Event createEvent(EventCommon, Args...) const;

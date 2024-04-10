@@ -1,19 +1,19 @@
 #ifndef DOCKRDS_H
 #define DOCKRDS_H
+
 #include <QDockWidget>
-#include <QSettings>
 
-namespace Ui {
-    class DockRDS;
+namespace Ui
+{
+class DockRDS;
 }
-
 
 class DockRDS : public QDockWidget
 {
     Q_OBJECT
 
 public:
-    explicit DockRDS(QWidget *parent = 0);
+    explicit DockRDS(QWidget* parent = 0);
     ~DockRDS();
 
 public slots:
@@ -35,7 +35,7 @@ private slots:
     void on_rdsCheckbox_toggled(bool checked);
 
 private:
-    Ui::DockRDS *ui;        /*! The Qt designer UI file. */
+    Ui::DockRDS* ui; /*! The Qt designer UI file. */
 };
 
 #endif // DOCKRDS_H

@@ -23,10 +23,8 @@
 #include "dockfft.h"
 #include "ui_dockfft.h"
 #include <QDebug>
-#include <QSettings>
 #include <QString>
 #include <QVariant>
-#include <math.h>
 
 #define DEFAULT_FFT_MAX_DB -20
 #define DEFAULT_FFT_MIN_DB -120
@@ -62,7 +60,8 @@ static const quint64 wf_span_table[] = {
     48 * 60 * 60 * 1000  // 48 hours
 };
 
-DockFft::DockFft(QWidget* parent) : QDockWidget(parent), ui(new Ui::DockFft)
+DockFft::DockFft(ReceiverModel* model, QWidget* parent) :
+    QDockWidget(parent), ui(new Ui::DockFft), m_model(model)
 {
     ui->setupUi(this);
 
@@ -209,254 +208,6 @@ quint64 DockFft::wfSpan()
     return wf_span_table[ui->wfSpanComboBox->currentIndex()];
 }
 
-/** Save FFT settings. */
-void DockFft::saveSettings(QSettings* settings)
-{
-    int intval;
-    QString strval;
-
-    if (!settings)
-        return;
-
-    settings->beginGroup("fft");
-
-    intval = fftSize();
-    if (intval != DEFAULT_FFT_SIZE)
-        settings->setValue("fft_size", intval);
-    else
-        settings->remove("fft_size");
-
-    intval = fftRate();
-    if (intval != DEFAULT_FFT_RATE)
-        settings->setValue("fft_rate", fftRate());
-    else
-        settings->remove("fft_rate");
-
-    intval = ui->fftWinComboBox->currentIndex();
-    if ((unsigned int)intval > window_strs.size())
-        intval = DEFAULT_FFT_WINDOW;
-    strval = window_strs[intval];
-    settings->setValue("fft_window", strval);
-
-    intval = wfSpan();
-    if (intval != DEFAULT_WATERFALL_SPAN)
-        settings->setValue("waterfall_span", intval);
-    else
-        settings->remove("waterfall_span");
-
-    if (ui->fftAvgSlider->value() != DEFAULT_FFT_AVG)
-        settings->setValue("averaging", ui->fftAvgSlider->value());
-    else
-        settings->remove("averaging");
-
-    intval = ui->plotScaleBox->currentIndex();
-    if (intval == 1)
-        strval = "dbv";
-    else if (intval == 2)
-        strval = "dbm";
-    else
-        strval = "dbfs"; // 0, default
-    settings->setValue("plot_y_unit", strval);
-
-    intval = ui->plotPerBox->currentIndex();
-    if (intval == 1)
-        strval = "hz";
-    else
-        strval = "rbw"; // 0, default
-    settings->setValue("plot_x_unit", strval);
-
-    QColor fftColor = ui->colorPicker->currentColor();
-    if (fftColor != QColor(0xFF, 0xFF, 0xFF, 0xFF))
-        settings->setValue("pandapter_color", fftColor);
-    else
-        settings->remove("pandapter_color");
-
-    if (ui->fillCheckBox->isChecked())
-        settings->setValue("pandapter_fill", true);
-    else
-        settings->remove("pandapter_fill");
-
-    // dB ranges
-    intval = ui->plotRangeSlider->minimumValue();
-    if (intval == DEFAULT_FFT_MIN_DB)
-        settings->remove("pandapter_min_db");
-    else
-        settings->setValue("pandapter_min_db", intval);
-
-    intval = ui->plotRangeSlider->maximumValue();
-    if (intval == DEFAULT_FFT_MAX_DB)
-        settings->remove("pandapter_max_db");
-    else
-        settings->setValue("pandapter_max_db", intval);
-
-    intval = ui->wfRangeSlider->minimumValue();
-    if (intval == DEFAULT_FFT_MIN_DB)
-        settings->remove("waterfall_min_db");
-    else
-        settings->setValue("waterfall_min_db", intval);
-
-    intval = ui->wfRangeSlider->maximumValue();
-    if (intval == DEFAULT_FFT_MAX_DB)
-        settings->remove("waterfall_max_db");
-    else
-        settings->setValue("waterfall_max_db", intval);
-
-    // pandapter and waterfall ranges locked together
-    if (ui->lockCheckBox->isChecked())
-        settings->setValue("db_ranges_locked", true);
-    else
-        settings->remove("db_ranges_locked");
-
-    if (ui->maxHoldCheckBox->isChecked())
-        settings->setValue("peak_hold", true);
-    else
-        settings->remove("peak_hold");
-
-    if (ui->minHoldCheckBox->isChecked())
-        settings->setValue("min_hold", true);
-    else
-        settings->remove("min_hold");
-
-    if (QString::compare(ui->cmapComboBox->currentData().toString(),
-                         DEFAULT_COLORMAP))
-        settings->setValue("waterfall_colormap",
-                           ui->cmapComboBox->currentData().toString());
-    else
-        settings->remove("waterfall_colormap");
-
-    // FFT Zoom
-    if (ui->fftZoomSlider->value() != DEFAULT_FFT_ZOOM)
-        settings->setValue("fft_zoom", ui->fftZoomSlider->value());
-    else
-        settings->remove("fft_zoom");
-
-    settings->endGroup();
-}
-
-/** Read FFT settings. */
-void DockFft::readSettings(QSettings* settings)
-{
-    int intval;
-    QString strval;
-    int fft_min, fft_max;
-    bool bool_val = false;
-    bool conv_ok = false;
-    QColor color;
-    int configversion;
-
-    if (!settings)
-        return;
-
-    configversion = settings->value("configversion").toInt();
-
-    settings->beginGroup("fft");
-
-    intval = settings->value("fft_rate", DEFAULT_FFT_RATE).toInt(&conv_ok);
-    if (conv_ok)
-        setFftRate(intval);
-    emit fftRateChanged(fftRate());
-
-    intval = settings->value("fft_size", DEFAULT_FFT_SIZE).toInt(&conv_ok);
-    if (conv_ok)
-        setFftSize(intval);
-    emit fftSizeChanged(fftSize());
-
-    if (configversion >= 4) {
-        strval = settings->value("fft_window", "hann").toString();
-        auto it = std::find(window_strs.begin(), window_strs.end(), strval);
-        if (it == window_strs.end())
-            intval = DEFAULT_FFT_WINDOW;
-        else
-            intval = std::distance(window_strs.begin(), it);
-        conv_ok = true;
-    } else {
-        intval =
-            settings->value("fft_window", DEFAULT_FFT_WINDOW).toInt(&conv_ok);
-    }
-    if (conv_ok)
-        ui->fftWinComboBox->setCurrentIndex(intval);
-
-    intval = settings->value("waterfall_span", DEFAULT_WATERFALL_SPAN)
-                 .toInt(&conv_ok);
-    if (conv_ok) {
-        if (configversion >= 4) {
-            setWfSpan(intval);
-        } else {
-            if ((intval >= 0) && (intval < ui->wfSpanComboBox->count()))
-                setWfSpan(wf_span_table[intval]);
-        }
-    }
-
-    intval = settings->value("averaging", DEFAULT_FFT_AVG).toInt(&conv_ok);
-    if (conv_ok)
-        ui->fftAvgSlider->setValue(intval);
-
-    // Plot scale and denominator
-    strval = settings->value("plot_y_unit", "dbfs").toString();
-    if (strval == "dbv")
-        intval = 1;
-    else if (strval == "dbm")
-        intval = 2;
-    else
-        intval = 0; // "dbfs", default
-    ui->plotScaleBox->setCurrentIndex(intval);
-    int plot_scale = intval;
-
-    strval = settings->value("plot_x_unit", "rbw").toString();
-    if (strval == "hz")
-        intval = 1;
-    else
-        intval = 0; // "rbw", default
-    ui->plotPerBox->setCurrentIndex(intval);
-    // Trigger additional required logic for plot_scale and plot_per
-    on_plotScaleBox_currentIndexChanged(plot_scale);
-
-    color = settings->value("pandapter_color", QColor(0xFF, 0xFF, 0xFF, 0xFF))
-                .value<QColor>();
-    ui->colorPicker->setCurrentColor(color);
-
-    bool_val = settings->value("pandapter_fill", false).toBool();
-    ui->fillCheckBox->setChecked(bool_val);
-
-    // delete old dB settings from config
-    if (settings->contains("reference_level"))
-        settings->remove("reference_level");
-
-    if (settings->contains("fft_range"))
-        settings->remove("fft_range");
-
-    fft_max = settings->value("pandapter_max_db", DEFAULT_FFT_MAX_DB).toInt();
-    fft_min = settings->value("pandapter_min_db", DEFAULT_FFT_MIN_DB).toInt();
-    setPandapterRange(fft_min, fft_max);
-    emit pandapterRangeChanged((float)fft_min, (float)fft_max);
-
-    fft_max = settings->value("waterfall_max_db", DEFAULT_FFT_MAX_DB).toInt();
-    fft_min = settings->value("waterfall_min_db", DEFAULT_FFT_MIN_DB).toInt();
-    setWaterfallRange(fft_min, fft_max);
-    emit waterfallRangeChanged((float)fft_min, (float)fft_max);
-
-    bool_val = settings->value("db_ranges_locked", false).toBool();
-    ui->lockCheckBox->setChecked(bool_val);
-
-    bool_val = settings->value("peak_hold", false).toBool();
-    ui->maxHoldCheckBox->setChecked(bool_val);
-    emit fftMaxHoldToggled(bool_val);
-
-    bool_val = settings->value("min_hold", false).toBool();
-    ui->minHoldCheckBox->setChecked(bool_val);
-    emit fftMinHoldToggled(bool_val);
-
-    QString cmap = settings->value("waterfall_colormap", "gqrx").toString();
-    ui->cmapComboBox->setCurrentIndex(ui->cmapComboBox->findData(cmap));
-
-    // FFT Zoom
-    intval = settings->value("fft_zoom", DEFAULT_FFT_ZOOM).toInt(&conv_ok);
-    if (conv_ok)
-        ui->fftZoomSlider->setValue(intval);
-
-    settings->endGroup();
-}
-
 void DockFft::setPandapterRange(float min, float max)
 {
     ui->plotRangeSlider->blockSignals(true);
@@ -578,7 +329,7 @@ void DockFft::on_plotRangeSlider_valuesChanged(int min, int max)
     if (ui->lockCheckBox->isChecked())
         ui->wfRangeSlider->setValues(min, max);
 
-    m_pand_last_modified = true;
+    // m_pand_last_modified = true;
     emit pandapterRangeChanged((float)min, (float)max);
 }
 
@@ -675,7 +426,7 @@ void DockFft::updateInfoLabels(void)
     if (rate == 0)
         ovr = 0;
     else {
-        interval_ms = 1000 / rate;
+        interval_ms = 1000.0 / rate;
         interval_samples = m_sample_rate * (interval_ms / 1000.0f);
         if (interval_samples >= size)
             ovr = 0;

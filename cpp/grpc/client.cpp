@@ -27,16 +27,6 @@ namespace violetrx
 #define INVOKE_CMD(cmd, callback, ...)                                         \
     if (callback) {                                                            \
         if (callback_thread_) {                                                \
-            callback_thread_->scheduleForced(cmd, callback __VA_OPT__(, )      \
-                                                      __VA_ARGS__);            \
-        } else {                                                               \
-            callback(__VA_ARGS__);                                             \
-        }                                                                      \
-    }
-
-#define INVOKE_MOVE_CMD(cmd, callback, ...)                                    \
-    if (callback) {                                                            \
-        if (callback_thread_) {                                                \
             callback_thread_->scheduleForced(                                  \
                 cmd, std::move(callback) __VA_OPT__(, ) __VA_ARGS__);          \
         } else {                                                               \
@@ -45,9 +35,6 @@ namespace violetrx
     }
 
 #define INVOKE(callback, ...) INVOKE_CMD(__func__, callback, __VA_ARGS__)
-
-#define INVOKE_MOVE(callback, ...)                                             \
-    INVOKE_CMD(__func__, std::move(callback), __VA_ARGS__)
 
 static constexpr int ALLOCATOR_CAPACITY = 16;
 
@@ -94,14 +81,25 @@ void GrpcClient::Start(Callback<> callback)
                           WRAP(data, call, &GrpcClient::OnStartCallDone));
 }
 
+void GrpcClient::GetDevices(Callback<std::vector<Device>> callback)
+{
+    auto [call, data] = Allocate<GetDevicesCall>();
+
+    data.callback = std::move(callback);
+
+    stub_->async()->GetDevices(
+        &data.context, &data.request, &data.response,
+        WRAP(data, call, &GrpcClient::OnGetDevicesCallDone));
+}
+
 void GrpcClient::Stop(Callback<> callback)
 {
     auto [call, data] = Allocate<StopCall>();
 
     data.callback = std::move(callback);
 
-    stub_->async()->Start(&data.context, &data.request, &data.response,
-                          WRAP(data, call, &GrpcClient::OnStopCallDone));
+    stub_->async()->Stop(&data.context, &data.request, &data.response,
+                         WRAP(data, call, &GrpcClient::OnStopCallDone));
 }
 
 void GrpcClient::SetInputDevice(std::string device, Callback<> callback)
@@ -253,7 +251,7 @@ void GrpcClient::SetFftWindow(WindowType window, Callback<> callback)
     auto [call, data] = Allocate<SetFftWindowCall>();
 
     data.callback = std::move(callback);
-    data.request.set_window_type(WindowTypeCoreToProto(window));
+    data.request.set_window_type(WindowCoreToProto(window));
 
     stub_->async()->SetFftWindow(
         &data.context, &data.request, &data.response,
@@ -583,12 +581,12 @@ void GrpcClient::StartUdpStreaming(uint64_t, const std::string&, int, bool,
                                    Callback<> callback)
 {
     // TODO
-    INVOKE_MOVE(callback, ErrorCode::UNIMPLEMENTED);
+    INVOKE(callback, ErrorCode::UNIMPLEMENTED);
 }
 void GrpcClient::StopUdpStreaming(uint64_t, Callback<> callback)
 {
     // TODO
-    INVOKE_MOVE(callback, ErrorCode::UNIMPLEMENTED);
+    INVOKE(callback, ErrorCode::UNIMPLEMENTED);
 }
 void GrpcClient::StartSniffer(uint64_t handle, int samplerate, int buffsize,
                               Callback<> callback)
@@ -682,21 +680,34 @@ public:
     EventsReactor(std::shared_ptr<Receiver::Rx::Stub> stub,
                   EventHandler callback,
                   std::shared_ptr<WorkerThread> callback_thread) :
-        stub_{std::move(stub)},
         callback_thread_{std::move(callback_thread)},
         callback_{std::move(callback)},
         unsubscribed_{false}
     {
-        stub_->async()->Subscribe(&context_, &request_, this);
+        stub->async()->Subscribe(&context_, &request_, this);
         StartRead(&response_);
         StartCall();
+    }
+
+    ~EventsReactor() { spdlog::debug("~EventsReactor"); }
+
+    void run_callback(const Event& event)
+    {
+        if (callback_) {
+            if (callback_thread_) {
+                callback_thread_->scheduleForced("EventsReactor::run_callback",
+                                                 callback_, event);
+            } else {
+                callback_(event);
+            }
+        }
     }
 
     void DeclareUnsubscription(Unsubscribed event = {
                                    {.id = -1, .timestamp = Timestamp::Now()}})
     {
         if (!unsubscribed_) {
-            INVOKE_MOVE(callback_, event);
+            run_callback(event);
             unsubscribed_ = true;
         }
     }
@@ -704,24 +715,28 @@ public:
     void OnReadDone(bool ok) override
     {
         if (!ok) {
+            spdlog::info("Unsubscribing due to error receiving event");
+
             DeclareUnsubscription();
             return;
         }
 
         std::optional<Event> maybe_event = EventProtoToCore(response_);
         if (maybe_event.has_value()) {
+            spdlog::info("{}", *maybe_event);
+
             const Event& event = *maybe_event;
 
-            spdlog::info("{} EventsReactor: {}", fmt::ptr(this), event);
-
             if (std::holds_alternative<Unsubscribed>(event)) {
+                spdlog::debug(
+                    "Unsubscribing because server sent unsubscribed event");
                 DeclareUnsubscription(std::get<Unsubscribed>(event));
                 return;
             } else {
-                INVOKE(callback_, event);
+                run_callback(event);
             }
         } else {
-            spdlog::error(
+            SPDLOG_ERROR(
                 "Receiver an event of type {} that I couldn't convert!",
                 (int)response_.tx_case());
         }
@@ -739,7 +754,6 @@ public:
     }
 
 private:
-    std::shared_ptr<Receiver::Rx::Stub> stub_;
     grpc::ClientContext context_;
     google::protobuf::Empty request_;
     Receiver::Event response_;
@@ -761,12 +775,11 @@ void GrpcClient::OnEmptyResponseCallDone(CallType& call,
                                          std::source_location loc)
 {
     if (status.ok()) {
-        INVOKE_MOVE_CMD(loc.function_name(), call.callback,
-                        ErrorCodeProtoToCore(call.response.code()));
+        INVOKE_CMD(loc.function_name(), call.callback,
+                   ErrorCodeProtoToCore(call.response.code()));
     } else {
-        spdlog::error(status.error_message());
-        INVOKE_MOVE_CMD(loc.function_name(), call.callback,
-                        ErrorCode::CALL_ERROR);
+        SPDLOG_ERROR(status.error_message());
+        INVOKE_CMD(loc.function_name(), call.callback, ErrorCode::CALL_ERROR);
     }
 }
 
@@ -776,14 +789,33 @@ void GrpcClient::OnValueResponseCallDone(CallType& call,
                                          std::source_location loc)
 {
     if (status.ok()) {
-        INVOKE_MOVE_CMD(loc.function_name(), call.callback,
-                        ErrorCodeProtoToCore(call.response.code()),
-                        call.response.value());
+        INVOKE_CMD(loc.function_name(), call.callback,
+                   ErrorCodeProtoToCore(call.response.code()),
+                   call.response.value());
     } else {
-        spdlog::error(status.error_message());
-        INVOKE_MOVE_CMD(loc.function_name(), call.callback,
-                        ErrorCode::CALL_ERROR,
-                        decltype(call.response.value()){});
+        SPDLOG_ERROR(status.error_message());
+        INVOKE_CMD(loc.function_name(), call.callback, ErrorCode::CALL_ERROR,
+                   decltype(call.response.value()){});
+    }
+}
+
+void GrpcClient::OnGetDevicesCallDone(GetDevicesCall& call,
+                                      const grpc::Status& status)
+{
+    if (status.ok()) {
+        std::vector<Device> result;
+
+        result.reserve(call.response.devices_size());
+
+        for (const auto& proto_device : call.response.devices()) {
+            result.push_back(DeviceProtoToCore(proto_device));
+        }
+
+        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
+               result);
+    } else {
+        SPDLOG_ERROR(status.error_message());
+        INVOKE(call.callback, ErrorCode::CALL_ERROR, std::vector<Device>{});
     }
 }
 
@@ -871,21 +903,21 @@ void GrpcClient::OnGetFftDataCallDone(GetFftDataCall& call,
                                       const grpc::Status& status)
 {
     if (!status.ok()) {
-        INVOKE_MOVE(call.callback, ErrorCode::CALL_ERROR, Timestamp{}, 0, 0,
-                    nullptr, 0);
+        INVOKE(call.callback, ErrorCode::CALL_ERROR, Timestamp{}, 0, 0, nullptr,
+               0);
         return;
     }
 
     if (call.response.code() != Receiver::ErrorCode::OK) {
-        INVOKE_MOVE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-                    Timestamp{}, 0, 0, nullptr, 0);
+        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
+               Timestamp{}, 0, 0, nullptr, 0);
     }
 
     const auto& proto_frame = call.response.fft_frame();
 
     if (proto_frame.data_size() > call.size) {
-        INVOKE_MOVE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE,
-                    Timestamp{}, 0, 0, nullptr, 0);
+        INVOKE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE, Timestamp{},
+               0, 0, nullptr, 0);
         return;
     }
 
@@ -896,19 +928,19 @@ void GrpcClient::OnGetFftDataCallDone(GetFftDataCall& call,
     std::memcpy(call.data, proto_frame.data().data(),
                 sizeof(float) * proto_frame.data_size());
 
-    INVOKE_MOVE(call.callback, ErrorCode::OK, timestamp, center_freq,
-                sample_rate, call.data, proto_frame.data_size());
+    INVOKE(call.callback, ErrorCode::OK, timestamp, center_freq, sample_rate,
+           call.data, proto_frame.data_size());
 }
 
 void GrpcClient::OnAddVfoChannelCallDone(AddVfoChannelCall& call,
                                          const grpc::Status& status)
 {
     if (status.ok()) {
-        INVOKE_MOVE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-                    call.response.handle());
+        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
+               call.response.handle());
     } else {
-        spdlog::error(status.error_message());
-        INVOKE_MOVE(call.callback, ErrorCode::CALL_ERROR, 0);
+        SPDLOG_ERROR(status.error_message());
+        INVOKE(call.callback, ErrorCode::CALL_ERROR, 0);
     }
 }
 
@@ -1036,27 +1068,27 @@ void GrpcClient::OnGetSnifferDataCallDone(GetSnifferDataCall& call,
                                           const grpc::Status& status)
 {
     if (!status.ok()) {
-        INVOKE_MOVE(call.callback, ErrorCode::CALL_ERROR, call.data, 0);
+        INVOKE(call.callback, ErrorCode::CALL_ERROR, call.data, 0);
         return;
     }
 
     if (call.response.code() != Receiver::ErrorCode::OK) {
-        INVOKE_MOVE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-                    call.data, 0);
+        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
+               call.data, 0);
     }
 
     const auto& proto_data = call.response.data();
 
     if (proto_data.size() > call.size) {
-        INVOKE_MOVE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE,
-                    call.data, 0);
+        INVOKE(call.callback, ErrorCode::INSUFFICIENT_BUFFER_SIZE, call.data,
+               0);
         return;
     }
 
     std::memcpy(call.data, proto_data.data(),
                 sizeof(float) * proto_data.size());
 
-    INVOKE_MOVE(call.callback, ErrorCode::OK, call.data, proto_data.size());
+    INVOKE(call.callback, ErrorCode::OK, call.data, proto_data.size());
 }
 void GrpcClient::OnStartRdsDecoderCallDone(StartRdsDecoderCall& call,
                                            const grpc::Status& status)
@@ -1077,11 +1109,11 @@ void GrpcClient::OnGetRdsDataCallDone(GetRdsDataCall& call,
                                       const grpc::Status& status)
 {
     if (status.ok()) {
-        INVOKE_MOVE(call.callback, ErrorCodeProtoToCore(call.response.code()),
-                    call.response.data(), call.response.type());
+        INVOKE(call.callback, ErrorCodeProtoToCore(call.response.code()),
+               call.response.data(), call.response.type());
     } else {
-        spdlog::error(status.error_message());
-        INVOKE_MOVE(call.callback, ErrorCode::CALL_ERROR, std::string{}, 0);
+        SPDLOG_ERROR(status.error_message());
+        INVOKE(call.callback, ErrorCode::CALL_ERROR, std::string{}, 0);
     }
 }
 

@@ -195,13 +195,18 @@ AsyncReceiver::AsyncReceiver()
     workerThread->start();
 }
 
-AsyncReceiver::~AsyncReceiver()
-{
-    spdlog::debug("AsyncReceiver::~AsyncReceiver");
-}
+AsyncReceiver::~AsyncReceiver() { spdlog::debug("~AsyncReceiver"); }
 
 template <typename Function>
 auto AsyncReceiver::schedule(Function&& func, const std::source_location loc)
+{
+    return workerThread->scheduleForced(loc.function_name(),
+                                        std::forward<Function>(func));
+}
+
+template <typename Function>
+auto AsyncReceiver::schedule(Function&& func,
+                             const std::source_location loc) const
 {
     return workerThread->scheduleForced(loc.function_name(),
                                         std::forward<Function>(func));
@@ -574,13 +579,15 @@ void AsyncReceiver::removeVfoChannelImpl(AsyncVfo::sptr vfo,
         createEvent<VfoRemoved>(EventCommon::make(), vfo->getId());
 
     CALLBACK_ON_SUCCESS();
+    signalStateChanged(vfo_removed_event);
 
+    // Erase and kill the vfo after we've notified that it's going to die, so
+    // that event handlers can still access it.
     vfos.erase(it);
 
     // Emit the same event with the same ID from the receiver and the vfo
     // itself.
     vfo->prepareToDie(vfo_removed_event);
-    signalStateChanged(vfo_removed_event);
 }
 
 void AsyncReceiver::removeVfoChannel(AsyncVfoIfaceSptr vfoIface,
@@ -758,6 +765,35 @@ AsyncVfoIfaceSptr AsyncReceiver::getVfo(uint64_t handle) const
 std::string AsyncReceiver::getIqRecordingPath() const
 {
     return rx->get_iq_filename();
+}
+
+void AsyncReceiver::getDevices(Callback<std::vector<Device>> callback) const
+{
+    RETURN_IF_WORKER_BUSY();
+
+    schedule([this, callback = std::move(callback)]() mutable {
+        auto devices = rx->get_devices();
+
+        std::vector<Device> result;
+        result.reserve(devices.size());
+
+        for (const auto& dev : devices) {
+            Device device;
+
+            auto label_it = dev.find("label");
+            if (label_it != dev.end()) {
+                device.label = label_it->second;
+            } else {
+                device.label = "Unknown";
+            }
+
+            device.devstr = dev.to_string();
+
+            result.push_back(std::move(device));
+        }
+
+        CALLBACK_ON_SUCCESS(std::move(result));
+    });
 }
 
 } // namespace violetrx

@@ -1,8 +1,6 @@
 #include "bookmarksgraphicsitem.h"
 #include "plottergraphicsview.h"
 
-#include "qtclient/bookmarks.h"
-
 #include <QGraphicsScene>
 #include <QGraphicsSceneHoverEvent>
 #include <QGraphicsView>
@@ -74,7 +72,7 @@ void BookmarksGraphicsItem::paint(QPainter* painter,
                       i));
         cachedShape.addRect(collisionRects.back().first);
 
-        QColor color = QColor(bookmark.GetColor());
+        QColor color = QColor(bookmark.color);
         color.setAlpha(100);
         // Vertical line
         painter->setPen(QPen(color, Qt::DashLine));

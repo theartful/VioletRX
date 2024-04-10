@@ -19,9 +19,20 @@ WorkerThread::WorkerThread() : avgLatency{0}, inTask{false} {}
 
 WorkerThread::~WorkerThread()
 {
-    if (thread.joinable()) {
-        thread.request_stop();
-        thread.join();
+    spdlog::debug("~WorkerThread");
+
+    if (isJoinable()) {
+        stop();
+        join();
+    }
+
+    // Print all enqueued tasks for debugging
+    spdlog::debug("\tUnfinished Tasks:");
+    {
+        Task task;
+        while (tasks.try_dequeue(task)) {
+            spdlog::debug("\t\t{}", task.cmd);
+        }
     }
 }
 
@@ -60,6 +71,11 @@ void WorkerThread::scheduleForcedImpl(const char* cmd, Function<void()> task)
 
 void WorkerThread::start()
 {
+    if (isJoinable()) {
+        spdlog::error("Worker thread is already running!");
+        return;
+    }
+
     thread = std::jthread(std::bind_front(&WorkerThread::startEventLoop, this));
 }
 

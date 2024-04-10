@@ -10,7 +10,6 @@ class ReceiverModel;
 class VFOChannelModel;
 class QVBoxLayout;
 class QScrollArea;
-class QSettings;
 class QToolButton;
 
 class VfosOpt : public QWidget

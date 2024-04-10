@@ -404,6 +404,19 @@ message RdsDataResponse
     int32 type = 3;
 }
 
+message Device
+{
+    string label = 1;
+    string devstr = 2;
+    // TODO: Add device options.
+}
+
+message DevicesResponse
+{
+    ErrorCode code = 1;
+    repeated Device devices = 2;
+}
+
 service Rx
 {
     rpc Subscribe(google.protobuf.Empty) returns(stream Event);
@@ -456,4 +469,6 @@ service Rx
     rpc StopRdsDecoder(VfoHandle) returns(EmptyResponse);
     rpc ResetRdsParser(VfoHandle) returns(EmptyResponse);
     rpc GetRdsData(VfoHandle) returns(RdsDataResponse);
+
+    rpc GetDevices(google.protobuf.Empty) returns(DevicesResponse);
 }

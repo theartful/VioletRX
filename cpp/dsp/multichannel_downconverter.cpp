@@ -11,7 +11,8 @@ multichannel_downconverter_cc::sptr
 multichannel_downconverter_cc::make(int decim, double samp_rate,
                                     int num_channels, int nthreads)
 {
-    return gnuradio::make_block_sptr<multichannel_downconverter_cc>( decim, samp_rate, num_channels, nthreads);
+    return gnuradio::make_block_sptr<multichannel_downconverter_cc>(
+        decim, samp_rate, num_channels, nthreads);
 }
 
 multichannel_downconverter_cc::multichannel_downconverter_cc(int decimation,
@@ -48,15 +49,11 @@ void multichannel_downconverter_cc::set_decim_and_samp_rate(int decim,
         d_proto_taps = gr::filter::firdes::low_pass(
             1.0, d_samp_rate, LPF_CUTOFF, out_rate - 2 * LPF_CUTOFF);
 
-        // init taps for each channel
         compute_sizes(d_proto_taps.size());
     }
 
-    if (d_num_channels > 0) {
-        for (int i = 0; i < d_num_channels; i++) {
-            build_composite_taps(i);
-            d_channels_data[i].updated = false;
-        }
+    for (auto& channel_data : d_channels_data) {
+        channel_data.updated = true;
     }
 }
 
@@ -75,7 +72,7 @@ void multichannel_downconverter_cc::build_composite_taps(size_t idx)
         }
 
         // initialize tail
-        std::vector<gr_complex>& tail = channel_data.tail;
+        volk::vector<gr_complex>& tail = channel_data.tail;
         tail.resize(tailsize());
         std::fill(tail.begin(), tail.end(), 0);
 
@@ -95,6 +92,7 @@ void multichannel_downconverter_cc::build_composite_taps(size_t idx)
         d_fwdfft->execute(); // do the xform
 
         // now copy output to d_xformed_taps
+        channel_data.xformed_taps.resize(d_fftsize);
         for (int i = 0; i < d_fftsize; i++) {
             channel_data.xformed_taps[i] = out[i];
         }
@@ -137,8 +135,6 @@ void multichannel_downconverter_cc::set_offset(double offset, int idx)
 {
     if (d_num_channels == -1 && idx >= (int)d_channels_data.size()) {
         d_channels_data.resize(idx + 1);
-        for (auto& channel_data : d_channels_data)
-            channel_data.xformed_taps.resize(d_fftsize);
     }
 
     d_channels_data[idx].offset = offset;

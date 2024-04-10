@@ -36,7 +36,6 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QResource>
-#include <QSettings>
 #include <QShortcut>
 #include <QString>
 #include <QSvgWidget>
@@ -47,8 +46,6 @@
 #include <QVBoxLayout>
 #include <QtGlobal>
 
-#include "bandplan.h"
-#include "bookmarkstaglist.h"
 #include "grpc/grpc_async_receiver.h"
 #include "ioconfig.h"
 #include "mainwindow.h"
@@ -61,10 +58,8 @@
 /* Qt Designer files */
 #include "ui_mainwindow.h"
 
-MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
-                       QWidget* parent) :
+MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent),
-    configOk(true),
     ui(new Ui::MainWindow),
     d_frameRequested(false),
     d_fftAvg(0.25),
@@ -92,9 +87,8 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
     ui->freqCtrl->setFrequency(144500000);
 
     /* create receiver object */
-    rxModel = new ReceiverModel(this);
-    rxModel->subscribe();
-
+    rxModel = new ReceiverModel(
+        violetrx::GrpcAsyncReceiver::make("0.0.0.0:50050"), this);
     connectReceiver();
 
     /* FFT timer & data */
@@ -105,12 +99,6 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
     d_avg_fft_rate = 0.0;
     d_frame_drop = false;
 
-    // create I/Q tool widget
-    iq_tool = new CIqTool(this);
-
-    // create DXC Objects
-    dxc_options = new DXCOptions(this);
-
     /* create dock widgets */
     uiDockVfosOpt = new QDockWidget("VFOs", this);
     uiDockVfosOpt->setObjectName("DockVFOs");
@@ -118,9 +106,7 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
     uiDockVfosOpt->setWidget(uiVfosOpt);
 
     uiDockInputCtl = new DockInputCtl(rxModel, this);
-    uiDockFft = new DockFft(this);
-    Bookmarks::Get().setConfigDir(m_cfg_dir);
-    uiDockBookmarks = new DockBookmarks(this);
+    uiDockFft = new DockFft(rxModel, this);
 
     // setup some toggle view shortcuts
     uiDockInputCtl->toggleViewAction()->setShortcut(
@@ -129,8 +115,6 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
         QKeySequence(Qt::CTRL | Qt::Key_R));
     uiDockFft->toggleViewAction()->setShortcut(
         QKeySequence(Qt::CTRL | Qt::Key_F));
-    uiDockBookmarks->toggleViewAction()->setShortcut(
-        QKeySequence(Qt::CTRL | Qt::Key_B));
     ui->mainToolBar->toggleViewAction()->setShortcut(
         QKeySequence(Qt::CTRL | Qt::Key_T));
 
@@ -156,18 +140,12 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
     tabifyDockWidget(uiDockVfosOpt, uiDockFft);
     uiDockVfosOpt->raise();
 
-    addDockWidget(Qt::BottomDockWidgetArea, uiDockBookmarks);
-
-    /* hide docks that we don't want to show initially */
-    uiDockBookmarks->hide();
-
     /* Add dock widget actions to View menu. By doing it this way all
        signal/slot connections will be established automagially.
     */
     ui->menu_View->addAction(uiDockInputCtl->toggleViewAction());
     ui->menu_View->addAction(uiDockVfosOpt->toggleViewAction());
     ui->menu_View->addAction(uiDockFft->toggleViewAction());
-    ui->menu_View->addAction(uiDockBookmarks->toggleViewAction());
     ui->menu_View->addSeparator();
     ui->menu_View->addAction(ui->mainToolBar->toggleViewAction());
     ui->menu_View->addSeparator();
@@ -215,18 +193,6 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
     connect(uiDockFft, SIGNAL(fftMinHoldToggled(bool)), ui->plotter,
             SLOT(enableMinHold(bool)));
 
-    // Bookmarks
-    connect(uiDockBookmarks, SIGNAL(newBookmarkActivated(qint64, QString, int)),
-            this, SLOT(onBookmarkActivated(qint64, QString, int)));
-    connect(uiDockBookmarks->actionAddBookmark, SIGNAL(triggered()), this,
-            SLOT(on_actionAddBookmark_triggered()));
-    connect(&Bookmarks::Get(), SIGNAL(BookmarksChanged()), ui->plotter,
-            SLOT(refreshBookmarks()));
-    connect(rxModel, SIGNAL(centerFreqChanged(qint64)), ui->plotter,
-            SLOT(refreshBookmarks()));
-    connect(rxModel, SIGNAL(inputRateChanged(qint64)), ui->plotter,
-            SLOT(refreshBookmarks()));
-
     // Plotter
     connect(ui->plotter, SIGNAL(zoomLevelChanged(float)), uiDockFft,
             SLOT(setZoomLevel(float)));
@@ -244,36 +210,7 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf,
     // is restored because device probing might change the device configuration
     CIoConfig::getDeviceList(devList);
 
-    m_recent_config = new RecentConfig(m_cfg_dir, ui->menu_RecentConfig);
-    connect(m_recent_config, SIGNAL(loadConfig(const QString&)), this,
-            SLOT(loadConfigSlot(const QString&)));
-
-    // restore last session
-    if (!loadConfig(cfgfile, true, true)) {
-
-        // first time config
-        qDebug() << "Launching I/O device editor";
-        if (firstTimeConfig() != QDialog::Accepted) {
-            qDebug() << "I/O device configuration cancelled.";
-            configOk = false;
-        } else {
-            configOk = true;
-        }
-    } else if (edit_conf) {
-        qDebug() << "Launching I/O device editor";
-        if (on_actionIoConfig_triggered() != QDialog::Accepted) {
-            qDebug() << "I/O device configuration cancelled.";
-            configOk = false;
-        } else {
-            configOk = true;
-        }
-    }
-
-    qsvg_dummy = new QSvgWidget();
-
-    ui->plotter->enableBookmarks(true);
-
-    rxModel->addVFOChannel();
+    rxModel->subscribe();
 }
 
 MainWindow::~MainWindow()
@@ -282,283 +219,11 @@ MainWindow::~MainWindow()
 
     iq_fft_timer->stop();
     delete iq_fft_timer;
-
-    if (m_settings) {
-        m_settings->setValue("configversion", 4);
-        m_settings->setValue("crashed", false);
-
-        // hide toolbar (default=false)
-        if (ui->mainToolBar->isHidden())
-            m_settings->setValue("gui/hide_toolbar", true);
-        else
-            m_settings->remove("gui/hide_toolbar");
-
-        m_settings->setValue("gui/geometry", saveGeometry());
-        m_settings->setValue("gui/state", saveState());
-
-        // save session
-        storeSession();
-
-        m_settings->sync();
-        delete m_settings;
-    }
-
-    delete m_recent_config;
-
-    delete iq_tool;
-    delete dxc_options;
     delete ui;
     delete uiDockVfosOpt;
-    delete uiDockBookmarks;
     delete uiDockFft;
     delete uiDockInputCtl;
-    delete qsvg_dummy;
     delete fftAverager;
-}
-
-/**
- * Load new configuration.
- * @param cfgfile
- * @returns True if config is OK, False if not (e.g. no input device specified).
- *
- * If cfgfile is an absolute path it will be used as is, otherwise it is assumed
- * to be the name of a file under m_cfg_dir.
- *
- * If cfgfile does not exist it will be created.
- *
- * If no input device is specified, we return false to signal that the I/O
- * configuration dialog should be run.
- *
- * FIXME: Refactor.
- */
-bool MainWindow::loadConfig(const QString& cfgfile, bool check_crash,
-                            bool restore_mainwindow)
-{
-    qint64 int64_val;
-    int int_val;
-    bool bool_val;
-    bool conf_ok = false;
-    bool conv_ok;
-    bool skip_loading_cfg = false;
-
-    qDebug() << "Loading configuration from:" << cfgfile;
-
-    if (m_settings) {
-        // set current config to not crashed before loading new config
-        m_settings->setValue("crashed", false);
-        m_settings->sync();
-        delete m_settings;
-    }
-
-    if (QDir::isAbsolutePath(cfgfile))
-        m_settings = new QSettings(cfgfile, QSettings::IniFormat);
-    else
-        m_settings = new QSettings(QString("%1/%2").arg(m_cfg_dir).arg(cfgfile),
-                                   QSettings::IniFormat);
-
-    qDebug() << "Configuration file:" << m_settings->fileName();
-
-    if (check_crash) {
-        if (m_settings->value("crashed", false).toBool()) {
-            qDebug() << "Crash guard triggered!";
-            auto* askUserAboutConfig =
-                new QMessageBox(QMessageBox::Warning, tr("Crash Detected!"),
-                                tr("<p>Gqrx has detected problems with the "
-                                   "current configuration. "
-                                   "Loading the configuration again could "
-                                   "cause the application to crash.</p>"
-                                   "<p>Do you want to edit the settings?</p>"),
-                                QMessageBox::Yes | QMessageBox::No);
-            askUserAboutConfig->setDefaultButton(QMessageBox::Yes);
-            askUserAboutConfig->setTextFormat(Qt::RichText);
-            askUserAboutConfig->exec();
-            if (askUserAboutConfig->result() == QMessageBox::Yes)
-                skip_loading_cfg = true;
-
-            delete askUserAboutConfig;
-        } else {
-            m_settings->setValue("crashed",
-                                 true); // clean exit will set this to FALSE
-            m_settings->sync();
-        }
-    }
-
-    if (skip_loading_cfg)
-        return false;
-
-    // manual reconf (FIXME: check status)
-    conv_ok = false;
-
-    // hide toolbar
-    bool_val = m_settings->value("gui/hide_toolbar", false).toBool();
-    if (bool_val)
-        ui->mainToolBar->hide();
-
-    // main window settings
-    if (restore_mainwindow) {
-        restoreGeometry(
-            m_settings->value("gui/geometry", saveGeometry()).toByteArray());
-        restoreState(m_settings->value("gui/state", saveState()).toByteArray());
-    }
-
-    QString indev = m_settings->value("input/device", "").toString();
-    if (!indev.isEmpty()) {
-        rxModel->setInputDevice(indev).onFailed(
-            this, [&](const std::exception& e) {
-                QMessageBox::warning(
-                    nullptr, QObject::tr("Failed to set input device"),
-                    QObject::tr("<p><b>%1</b></p>"
-                                "Please select another device.")
-                        .arg(e.what()),
-                    QMessageBox::Ok);
-            });
-    }
-
-    QString outdev = m_settings->value("output/device", "").toString();
-
-    try {
-        rxModel->setOutputDevice(outdev);
-    } catch (std::exception& x) {
-        QMessageBox::warning(nullptr,
-                             QObject::tr("Failed to set output device"),
-                             QObject::tr("<p><b>%1</b></p>"
-                                         "Please select another device.")
-                                 .arg(x.what()),
-                             QMessageBox::Ok);
-    }
-
-    int_val = m_settings->value("input/sample_rate", 0).toInt(&conv_ok);
-    if (conv_ok && (int_val > 0)) {
-        auto onError = []() {
-            auto* dialog = new QMessageBox(
-                QMessageBox::Warning, tr("Device Error"),
-                tr("There was an error configuring the input device.\n"
-                   "Please make sure that a supported device is attached "
-                   "to the computer and restart gqrx."),
-                QMessageBox::Ok);
-            dialog->setModal(true);
-            dialog->setAttribute(Qt::WA_DeleteOnClose);
-            dialog->show();
-        };
-
-        rxModel->setInputRate(int_val)
-            .then(this,
-                  [=](int rate) {
-                      if (rate == 0) {
-                          onError();
-                      } else {
-                          qDebug() << "Requested sample rate:" << int_val;
-                          qDebug() << "Actual sample rate   :"
-                                   << QString("%1").arg(rate);
-                      }
-                  })
-            .onFailed(this, [=]() { onError(); });
-    }
-    int_val = m_settings->value("input/decimation", 1).toInt(&conv_ok);
-    if (conv_ok && int_val >= 2) {
-        rxModel->setInputDecim(int_val);
-    } else {
-        rxModel->setInputDecim(1);
-    }
-
-    int64_val = m_settings->value("input/bandwidth", 0).toInt(&conv_ok);
-    if (conv_ok) {
-        // set analog bw even if 0 since for some devices 0 Hz means "auto"
-        rxModel->setAnalogBandwidth((double)int64_val);
-    }
-
-    uiDockInputCtl->readSettings(
-        m_settings); // this will also update freq range
-    // uiVfoOpt->readSettings(m_settings);
-    uiDockFft->readSettings(m_settings);
-    dxc_options->readSettings(m_settings);
-
-    iq_tool->readSettings(m_settings);
-
-    emit m_recent_config->configLoaded(m_settings->fileName());
-    rxModel->setAntenna("RX2");
-
-    return conf_ok;
-}
-
-/**
- * @brief Save current configuration to a file.
- * @param cfgfile
- * @returns True if the operation was successful.
- *
- * If cfgfile is an absolute path it will be used as is, otherwise it is
- * assumed to be the name of a file under m_cfg_dir.
- *
- * If cfgfile already exists it will be overwritten (we assume that a file
- * selection dialog has already asked for confirmation of overwrite).
- *
- * Since QSettings does not support "save as" we do this by copying the current
- * settings to a new file.
- */
-bool MainWindow::saveConfig(const QString& cfgfile)
-{
-    QString oldfile = m_settings->fileName();
-    QString newfile;
-
-    qDebug() << "Saving configuration to:" << cfgfile;
-
-    m_settings->sync();
-
-    if (QDir::isAbsolutePath(cfgfile))
-        newfile = cfgfile;
-    else
-        newfile = QString("%1/%2").arg(m_cfg_dir).arg(cfgfile);
-
-    if (newfile == oldfile) {
-        qDebug() << "New file is equal to old file => SYNCING...";
-        emit m_recent_config->configSaved(newfile);
-        return true;
-    }
-
-    if (QFile::exists(newfile)) {
-        qDebug() << "File" << newfile << "already exists => DELETING...";
-        if (QFile::remove(newfile))
-            qDebug() << "Deleted" << newfile;
-        else
-            qDebug() << "Failed to delete" << newfile;
-    }
-    if (QFile::copy(oldfile, newfile)) {
-        loadConfig(cfgfile, false, false);
-        return true;
-    } else {
-        qDebug() << "Error saving configuration to" << newfile;
-        return false;
-    }
-}
-
-/**
- * Store session-related parameters (frequency, gain,...)
- *
- * This needs to be called when we switch input source, otherwise the
- * new source would use the parameters stored on last exit.
- */
-void MainWindow::storeSession()
-{
-    if (m_settings) {
-        m_settings->setValue("input/frequency", ui->freqCtrl->getFrequency());
-
-        uiDockInputCtl->saveSettings(m_settings);
-        // uiVfoOpt->saveSettings(m_settings);
-        uiDockFft->saveSettings(m_settings);
-
-        iq_tool->saveSettings(m_settings);
-        dxc_options->saveSettings(m_settings);
-
-        {
-            // qint64     flo, fhi;
-            // vfo_gi->getHiLowCutFrequencies(&flo, &fhi);
-            // if (flo != fhi)
-            // {
-            //     m_settings->setValue("receiver/filter_low_cut", flo);
-            //     m_settings->setValue("receiver/filter_high_cut", fhi);
-            // }
-        }
-    }
 }
 
 /**
@@ -601,7 +266,6 @@ void MainWindow::onCenterFreqChanged(qint64 center_freq)
     ui->plotter->setCenterFreq(center_freq);
     ui->waterfall->setCenterFreq(center_freq);
     ui->freqCtrl->setFrequency(center_freq);
-    uiDockBookmarks->setNewFrequency(center_freq);
 }
 
 /**
@@ -624,24 +288,18 @@ void MainWindow::iqFftTimeout()
     if (d_frameRequested)
         return;
 
-    const unsigned int fftsize = rxModel->iqFftSize();
-
-    if (fftsize == 0) {
-        /* nothing to do, wait until next activation. */
-        return;
-    }
-
     // Track the frame rate and warn if not keeping up. Since the interval is
     // ms, the timer can not be set exactly to all rates.
     const quint64 now_ms = QDateTime::currentMSecsSinceEpoch();
     const float expected_rate = 1000.0f / (float)iq_fft_timer->interval();
     const float last_fft_rate = 1000.0f / (float)(now_ms - d_last_fft_ms);
     const float alpha = std::pow(expected_rate, -0.75f);
-    if (d_avg_fft_rate == 0.0f)
+    if (d_avg_fft_rate == 0.0f) {
         d_avg_fft_rate = expected_rate;
-    else
+    } else {
         d_avg_fft_rate =
             (1.0f - alpha) * d_avg_fft_rate + alpha * last_fft_rate;
+    }
 
     const bool drop = d_avg_fft_rate < expected_rate * 0.95f;
     if (drop != d_frame_drop) {
@@ -652,54 +310,25 @@ void MainWindow::iqFftTimeout()
         }
         d_frame_drop = drop;
     }
-    d_last_fft_ms = now_ms;
 
     d_frameRequested = true;
     rxModel->getIqFftData(&d_iqFrame)
-        .then(this, std::bind_front(&MainWindow::refreshFft, this));
-
-    fftAverager->step(d_iqFrame.fft_points.data(), d_iqFrame.fft_points.size());
-
-    const std::vector<float>& iirData = fftAverager->iirData();
-    const std::vector<float>& data = fftAverager->data();
-
-    ui->plotter->setNewFftData(iirData.data(), iirData.size());
-    ui->waterfall->setNewFftData(data.data(), data.size());
+        .then(this, std::bind_front(&MainWindow::refreshFft, this))
+        .onFailed(
+            [](const std::exception& e) { spdlog::error("{}", e.what()); });
 }
 
 void MainWindow::refreshFft()
 {
     d_frameRequested = false;
 
-    const size_t fftsize = d_iqFrame.fft_points.size();
+    d_last_fft_ms = QDateTime::currentMSecsSinceEpoch();
 
+    const size_t fftsize = d_iqFrame.fft_points.size();
     if (fftsize == 0) {
         /* nothing to do, wait until next activation. */
         return;
     }
-
-    // Track the frame rate and warn if not keeping up. Since the interval is
-    // ms, the timer can not be set exactly to all rates.
-    const quint64 now_ms = QDateTime::currentMSecsSinceEpoch();
-    const float expected_rate = 1000.0f / (float)iq_fft_timer->interval();
-    const float last_fft_rate = 1000.0f / (float)(now_ms - d_last_fft_ms);
-    const float alpha = std::pow(expected_rate, -0.75f);
-    if (d_avg_fft_rate == 0.0f)
-        d_avg_fft_rate = expected_rate;
-    else
-        d_avg_fft_rate =
-            (1.0f - alpha) * d_avg_fft_rate + alpha * last_fft_rate;
-
-    const bool drop = d_avg_fft_rate < expected_rate * 0.95f;
-    if (drop != d_frame_drop) {
-        if (drop) {
-            uiDockFft->setActualFrameRate(d_avg_fft_rate, true);
-        } else {
-            uiDockFft->setActualFrameRate(d_avg_fft_rate, false);
-        }
-        d_frame_drop = drop;
-    }
-    d_last_fft_ms = now_ms;
 
     fftAverager->step(d_iqFrame.fft_points.data(), fftsize);
 
@@ -824,102 +453,15 @@ int MainWindow::on_actionIoConfig_triggered()
 {
     qDebug() << "Configure I/O devices.";
 
-    auto* ioconf = new CIoConfig(m_settings, devList);
-    auto confres = ioconf->exec();
+    CIoConfig ioconf{devList};
+    auto confres = ioconf.exec();
 
     if (confres == QDialog::Accepted) {
-        bool dsp_running = ui->actionDSP->isChecked();
-
-        if (dsp_running)
-            // suspend DSP while we reload settings
-            on_actionDSP_triggered(false);
-
-        // Refresh LNB LO in dock widget, otherwise changes will be lost
-        uiDockInputCtl->readLnbLoFromSettings(m_settings);
-        storeSession();
-        loadConfig(m_settings->fileName(), false, false);
-
-        if (dsp_running)
-            // restsart DSP
-            on_actionDSP_triggered(true);
+        rxModel->setInputDevice(ioconf.getInputDevice());
     }
 
-    delete ioconf;
-
     return confres;
 }
-
-/** Run first time configurator. */
-int MainWindow::firstTimeConfig()
-{
-    qDebug() << __func__;
-
-    auto* ioconf = new CIoConfig(m_settings, devList);
-    auto confres = ioconf->exec();
-
-    if (confres == QDialog::Accepted)
-        loadConfig(m_settings->fileName(), false, false);
-
-    delete ioconf;
-
-    return confres;
-}
-
-/** Load configuration activated by user. */
-void MainWindow::on_actionLoadSettings_triggered()
-{
-    auto cfgfile = QFileDialog::getOpenFileName(
-        this, tr("Load settings"),
-        m_last_dir.isEmpty() ? m_cfg_dir : m_last_dir, tr("Settings (*.conf)"));
-
-    qDebug() << "File to open:" << cfgfile;
-
-    if (cfgfile.isEmpty())
-        return;
-
-    if (!cfgfile.endsWith(".conf", Qt::CaseSensitive))
-        cfgfile.append(".conf");
-
-    loadConfig(cfgfile, cfgfile != m_settings->fileName(),
-               cfgfile != m_settings->fileName());
-
-    // store last dir
-    QFileInfo fi(cfgfile);
-    if (m_cfg_dir != fi.absolutePath())
-        m_last_dir = fi.absolutePath();
-}
-
-/** Save configuration activated by user. */
-void MainWindow::on_actionSaveSettings_triggered()
-{
-    auto cfgfile = QFileDialog::getSaveFileName(
-        this, tr("Save settings"),
-        m_last_dir.isEmpty() ? m_cfg_dir : m_last_dir, tr("Settings (*.conf)"));
-
-    qDebug() << "File to save:" << cfgfile;
-
-    if (cfgfile.isEmpty())
-        return;
-
-    if (!cfgfile.endsWith(".conf", Qt::CaseSensitive))
-        cfgfile.append(".conf");
-
-    storeSession();
-    saveConfig(cfgfile);
-
-    // store last dir
-    QFileInfo fi(cfgfile);
-    if (m_cfg_dir != fi.absolutePath())
-        m_last_dir = fi.absolutePath();
-}
-
-void MainWindow::on_actionSaveWaterfall_triggered()
-{
-    // TODO
-}
-
-/** Show I/Q player. */
-void MainWindow::on_actionIqTool_triggered() { iq_tool->show(); }
 
 void MainWindow::onPlotterViewportChanged(const QRectF& viewport)
 {
@@ -940,16 +482,6 @@ void MainWindow::on_actionFullScreen_triggered(bool checked)
 }
 
 #define DATA_BUFFER_SIZE 48000
-
-/** Show DXC Options. */
-void MainWindow::on_actionDX_Cluster_triggered() { dxc_options->show(); }
-
-void MainWindow::onBookmarkActivated(qint64 /* freq */,
-                                     const QString& /* demod */,
-                                     int /* bandwidth */)
-{
-    // TODO
-}
 
 /**
  * Show kbd-shortcuts.txt in a dialog window.
@@ -1004,16 +536,6 @@ void MainWindow::showSimpleTextFile(const QString& resource_path,
     // browser and layout deleted automatically
 }
 
-/**
- * @brief Slot for handling loadConfig signals
- * @param cfgfile
- */
-void MainWindow::loadConfigSlot(const QString& cfgfile)
-{
-    loadConfig(cfgfile, cfgfile != m_settings->fileName(),
-               cfgfile != m_settings->fileName());
-}
-
 void MainWindow::on_actionAbout_triggered()
 {
     // TODO
@@ -1061,84 +583,6 @@ void MainWindow::on_actionAboutGqrx_triggered()
 void MainWindow::on_actionAboutQt_triggered()
 {
     QMessageBox::aboutQt(this, tr("About Qt"));
-}
-
-void MainWindow::on_actionAddBookmark_triggered()
-{
-    bool ok = false;
-    QString name;
-    QStringList tags;
-
-    // Create and show the Dialog for a new Bookmark.
-    // Write the result into variable 'name'.
-    {
-        QDialog dialog(this);
-        dialog.setWindowTitle("New bookmark");
-
-        auto* LabelAndTextfieldName = new QGroupBox(&dialog);
-        auto* label1 = new QLabel("Bookmark name:", LabelAndTextfieldName);
-        auto* textfield = new QLineEdit(LabelAndTextfieldName);
-        auto* layout = new QHBoxLayout;
-        layout->addWidget(label1);
-        layout->addWidget(textfield);
-        LabelAndTextfieldName->setLayout(layout);
-
-        auto* buttonCreateTag = new QPushButton("Create new Tag", &dialog);
-
-        auto* taglist = new BookmarksTagList(&dialog, false);
-        taglist->updateTags();
-        taglist->DeselectAll();
-
-        auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok |
-                                               QDialogButtonBox::Cancel);
-        connect(buttonBox, SIGNAL(accepted()), &dialog, SLOT(accept()));
-        connect(buttonBox, SIGNAL(rejected()), &dialog, SLOT(reject()));
-        connect(buttonCreateTag, SIGNAL(clicked()), taglist, SLOT(AddNewTag()));
-
-        auto* mainLayout = new QVBoxLayout(&dialog);
-        mainLayout->addWidget(LabelAndTextfieldName);
-        mainLayout->addWidget(buttonCreateTag);
-        mainLayout->addWidget(taglist);
-        mainLayout->addWidget(buttonBox);
-
-        ok = dialog.exec();
-        if (ok) {
-            name = textfield->text();
-            tags = taglist->getSelectedTags();
-            qDebug() << "Tags: " << tags;
-        } else {
-            name.clear();
-            tags.clear();
-        }
-    }
-
-    // Add new Bookmark to Bookmarks.
-    if (ok) {
-        int i;
-
-        BookmarkInfo info;
-        VFOChannelModel* activeVfo = rxModel->activeVfo();
-        if (activeVfo) {
-            info.frequency = activeVfo->filterOffset() + rxModel->centerFreq();
-            info.bandwidth = activeVfo->filterBw();
-            info.modulation =
-                VFOChannelModel::demodAsString(activeVfo->demod());
-        } else {
-            info.frequency = rxModel->centerFreq();
-            info.bandwidth = 100000;
-            info.modulation = VFOChannelModel::demodAsString(Demod::WFM_STEREO);
-        }
-        info.name = name;
-        info.tags.clear();
-        if (tags.empty())
-            info.tags.append(Bookmarks::Get().findOrAddTag(""));
-
-        for (i = 0; i < tags.size(); ++i)
-            info.tags.append(Bookmarks::Get().findOrAddTag(tags[i]));
-
-        Bookmarks::Get().add(info);
-        uiDockBookmarks->updateTags();
-    }
 }
 
 void MainWindow::frequencyFocusShortcut() { ui->freqCtrl->setFrequencyFocus(); }
@@ -1205,7 +649,6 @@ void MainWindow::onInputRateChanged(qint64 rate)
     ui->plotter->setSampleRate((float)rate);
     ui->waterfall->setSampleRate((float)rate);
     fftAverager->setSampleRate((float)rate);
-    iq_tool->setSampleRate(rate);
 }
 
 void MainWindow::onVfoAdded(VFOChannelModel* vfo)

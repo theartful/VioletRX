@@ -30,6 +30,7 @@
 #include <gnuradio/blocks/wavfile_source.h>
 #include <gnuradio/top_block.h>
 #include <memory>
+#include <osmosdr/device.h>
 #include <osmosdr/source.h>
 #include <string>
 #include <vector>
@@ -72,6 +73,8 @@ public:
     bool is_running();
     void set_input_device(const std::string& device);
     void set_output_device(const std::string& device);
+
+    osmosdr::devices_t get_devices() const;
     std::string get_input_device() const { return input_devstr; }
 
     std::vector<std::string> get_antennas(void) const;

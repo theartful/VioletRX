@@ -270,63 +270,6 @@
     </widget>
    </item>
    <item>
-    <widget class="QGroupBox" name="groupBoxOutput">
-     <property name="title">
-      <string>Audio output</string>
-     </property>
-     <layout class="QFormLayout" name="formLayout_2">
-      <property name="labelAlignment">
-       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-      </property>
-      <item row="0" column="0">
-       <widget class="QLabel" name="outDevLabel">
-        <property name="text">
-         <string>Device</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QComboBox" name="outDevCombo">
-        <property name="toolTip">
-         <string>Select which device to use for audio output.
-Leave it at default unless you know what you are doing.</string>
-        </property>
-        <property name="sizeAdjustPolicy">
-         <enum>QComboBox::AdjustToContents</enum>
-        </property>
-        <property name="minimumContentsLength">
-         <number>15</number>
-        </property>
-        <item>
-         <property name="text">
-          <string>Default</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="outSrLabel">
-        <property name="text">
-         <string>Sample rate</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QComboBox" name="outSrCombo">
-        <property name="toolTip">
-         <string>Select the audio sample rate</string>
-        </property>
-        <item>
-         <property name="text">
-          <string>48 kHz</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>

@@ -12,7 +12,7 @@ namespace violetrx
 Receiver::ErrorCode ErrorCodeCoreToProto(ErrorCode code);
 ErrorCode ErrorCodeProtoToCore(Receiver::ErrorCode code);
 
-Receiver::WindowType WindowTypeCoreToProto(WindowType code);
+Receiver::WindowType WindowCoreToProto(WindowType code);
 WindowType WindowProtoToCore(Receiver::WindowType window);
 
 Receiver::FilterShape FilterShapeCoreToProto(FilterShape filter_shape);
@@ -26,6 +26,11 @@ google::protobuf::Timestamp TimestampCoreToProto(Timestamp timestamp);
 
 std::optional<Event> EventProtoToCore(const Receiver::Event& proto_event);
 bool EventCoreToProto(const Event& event, Receiver::Event* proto_event);
+
+Device DeviceProtoToCore(const Receiver::Device& proto_device);
+
+void FftFrameCoreToProto(const FftFrame& frame,
+                         Receiver::FftFrame* proto_frame);
 
 } // namespace violetrx
 

@@ -23,6 +23,7 @@ public:
                std::shared_ptr<WorkerThread> callback_thread = {});
     ~GrpcClient();
 
+    void GetDevices(Callback<std::vector<Device>> = {});
     void Start(Callback<> = {});
     void Stop(Callback<> = {});
     void SetInputDevice(std::string, Callback<> = {});
@@ -113,6 +114,7 @@ private:
         CallType& call, const grpc::Status& status,
         std::source_location loc = std::source_location::current());
 
+    void OnGetDevicesCallDone(GetDevicesCall& call, const grpc::Status& status);
     void OnStartCallDone(StartCall& call, const grpc::Status& status);
     void OnStopCallDone(StopCall& call, const grpc::Status& status);
     void OnInputDeviceCallDone(SetInputDeviceCall& call,

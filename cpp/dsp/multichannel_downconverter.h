@@ -44,7 +44,7 @@ private:
         double offset = 0.0;
         double prev_offset = 0.0;
         volk::vector<gr_complex> xformed_taps;
-        std::vector<gr_complex> tail;
+        volk::vector<gr_complex> tail;
         gr::blocks::rotator rotator;
         gr_complex* output;
     };

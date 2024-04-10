@@ -31,7 +31,7 @@ struct Timestamp {
 
     template <typename Clock, typename Duration>
     static inline Timestamp
-    TimepointToTimestamp(const std::chrono::time_point<Clock, Duration>& t)
+    FromTimepoint(const std::chrono::time_point<Clock, Duration>& t)
     {
         auto seconds = std::chrono::duration_cast<std::chrono::seconds>(
             t.time_since_epoch());
@@ -43,10 +43,25 @@ struct Timestamp {
                          .nanos = static_cast<uint32_t>(nanos.count())};
     }
 
+    inline std::chrono::system_clock::time_point ToTimepoint() const
+    {
+        return std::chrono::system_clock::time_point{
+            std::chrono::seconds(seconds) + std::chrono::nanoseconds(nanos)};
+    }
+
     static inline Timestamp Now()
     {
-        return TimepointToTimestamp(std::chrono::system_clock::now());
+        // Note: system_clock might change in the course of the program, which
+        // might cause unintended bugs.
+        return FromTimepoint(std::chrono::system_clock::now());
     }
+};
+
+struct FftFrame {
+    Timestamp timestamp;
+    int64_t center_freq;
+    int32_t sample_rate;
+    std::vector<float> fft_points;
 };
 
 struct GainStage {
@@ -86,6 +101,11 @@ struct UdpStreamParams {
 struct SnifferParams {
     int sampleRate;
     int buffSize;
+};
+
+struct Device {
+    std::string label;
+    std::string devstr;
 };
 
 enum class Demod {

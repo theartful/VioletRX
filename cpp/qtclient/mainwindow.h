@@ -33,14 +33,10 @@
 #include <QSvgWidget>
 #include <QTimer>
 
-#include "qtclient/dockbookmarks.h"
 #include "qtclient/dockfft.h"
 #include "qtclient/dockinputctl.h"
-#include "qtclient/dxc_options.h"
-#include "qtclient/iq_tool.h"
 
 #include "qtclient/receiver_model.h"
-#include "qtclient/recentconfig.h"
 
 namespace Ui
 {
@@ -58,17 +54,8 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(const QString& cfgfile, bool edit_conf,
-                        QWidget* parent = nullptr);
+    explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
-
-    bool loadConfig(const QString& cfgfile, bool check_crash,
-                    bool restore_mainwindow);
-    bool saveConfig(const QString& cfgfile);
-    void storeSession();
-
-    bool configOk; /*!< Main app uses this flag to know whether we should abort
-                      or continue. */
 
 public slots:
     /* Receiver */
@@ -89,10 +76,8 @@ public slots:
 private:
     Ui::MainWindow* ui;
 
-    QPointer<QSettings> m_settings; /*!< Application wide settings. */
     QString m_cfg_dir; /*!< Default config dir, e.g. XDG_CONFIG_HOME. */
     QString m_last_dir;
-    RecentConfig* m_recent_config; /* Menu File Recent config */
 
     FftFrame d_iqFrame;
     bool d_frameRequested;
@@ -110,10 +95,6 @@ private:
 
     DockInputCtl* uiDockInputCtl;
     DockFft* uiDockFft;
-    DockBookmarks* uiDockBookmarks;
-
-    CIqTool* iq_tool;
-    DXCOptions* dxc_options;
 
     /* data decoders */
     bool dec_rds{};
@@ -126,12 +107,6 @@ private:
     ReceiverModel* rxModel;
 
     std::map<QString, QVariant> devList;
-
-    // dummy widget to enforce linking to QtSvg
-    QSvgWidget* qsvg_dummy;
-
-    QFont font;
-
     FftAverager* fftAverager;
 
 private:
@@ -145,9 +120,6 @@ private:
     void connectReceiver();
 
 private slots:
-    /* RecentConfig */
-    void loadConfigSlot(const QString& cfgfile);
-
     /* baseband receiver */
     void setIgnoreLimits(bool ignore_limits);
 
@@ -164,26 +136,14 @@ private slots:
     /* FFT plot */
     void onPlotterViewportChanged(const QRectF&);
 
-    /* Bookmarks */
-    void onBookmarkActivated(qint64 freq, const QString& demod, int bandwidth);
-
     /* menu and toolbar actions */
     void on_actionDSP_triggered(bool checked);
     int on_actionIoConfig_triggered();
-    void on_actionLoadSettings_triggered();
-    void on_actionSaveSettings_triggered();
-    void on_actionSaveWaterfall_triggered();
-    void on_actionIqTool_triggered();
     void on_actionFullScreen_triggered(bool checked);
     void on_actionKbdShortcuts_triggered();
     void on_actionAbout_triggered();
     void on_actionAboutQt_triggered();
     void on_actionAboutGqrx_triggered();
-    void on_actionAddBookmark_triggered();
-    void on_actionDX_Cluster_triggered();
-
-    /* window close signals */
-    int firstTimeConfig();
 
     /* cyclic processing */
     void iqFftTimeout();

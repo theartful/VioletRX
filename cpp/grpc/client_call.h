@@ -17,6 +17,12 @@ struct ClientCallCommon {
     grpc::ClientContext context;
 };
 
+struct GetDevicesCall : public ClientCallCommon {
+    google::protobuf::Empty request;
+    Receiver::DevicesResponse response;
+    Callback<std::vector<Device>> callback;
+};
+
 struct StartCall : public ClientCallCommon {
     google::protobuf::Empty request;
     Receiver::EmptyResponse response;
@@ -308,12 +314,12 @@ struct GetRdsDataCall : public ClientCallCommon {
 };
 
 using ClientCall = std::variant<
-    StartCall, StopCall, SetInputDeviceCall, SetAntennaCall, SetInputRateCall,
-    SetInputDecimCall, SetIqSwapCall, SetDcCancelCall, SetIqBalanceCall,
-    SetAutoGainCall, SetRfFreqCall, SetGainCall, SetFreqCorrCall,
-    SetFftSizeCall, SetFftWindowCall, GetFftDataCall, AddVfoChannelCall,
-    RemoveVfoChannelCall, SetFilterOffsetCall, SetFilterCall, SetCwOffsetCall,
-    SetDemodCall, GetSignalPwrCall, SetNoiseBlankerCall,
+    GetDevicesCall, StartCall, StopCall, SetInputDeviceCall, SetAntennaCall,
+    SetInputRateCall, SetInputDecimCall, SetIqSwapCall, SetDcCancelCall,
+    SetIqBalanceCall, SetAutoGainCall, SetRfFreqCall, SetGainCall,
+    SetFreqCorrCall, SetFftSizeCall, SetFftWindowCall, GetFftDataCall,
+    AddVfoChannelCall, RemoveVfoChannelCall, SetFilterOffsetCall, SetFilterCall,
+    SetCwOffsetCall, SetDemodCall, GetSignalPwrCall, SetNoiseBlankerCall,
     SetNoiseBlankerThresholdCall, SetSqlLevelCall, SetSqlAlphaCall,
     SetAgcOnCall, SetAgcHangCall, SetAgcThresholdCall, SetAgcSlopeCall,
     SetAgcDecayCall, SetAgcManualGainCall, SetFmMaxDevCall, SetFmDeemphCall,

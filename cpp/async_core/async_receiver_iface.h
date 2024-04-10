@@ -23,6 +23,7 @@ public:
 public:
     virtual ~AsyncReceiverIface() {}
 
+    virtual void getDevices(Callback<std::vector<Device>>) const = 0;
     virtual void subscribe(ReceiverEventHandler, Callback<Connection>) = 0;
     virtual void unsubscribe(const Connection&) = 0;
 
@@ -75,6 +76,8 @@ public:
                 callback(ErrorCode::OK, vfo);
             });
     }
+
+    virtual bool isRemote() const = 0;
 
     /* Sync API: getters can only be called inside a successful callback
      * function */

@@ -35,7 +35,10 @@ constexpr int kEventsQueueSize = 64;
 
 GrpcServer::GrpcServer(AsyncReceiverIface::sptr async_receiver,
                        const std::string& addr_url) :
-    async_receiver_{std::move(async_receiver)}, events_queue_{kEventsQueueSize}
+    async_receiver_{std::move(async_receiver)},
+    events_queue_{kEventsQueueSize},
+    last_fft_frame_{},
+    other_fft_frame_{}
 {
     // FIXME: Should we wait for subscription to succeed before we start the
     // server?
@@ -139,7 +142,7 @@ GrpcServer::Stop(grpc::CallbackServerContext* context,
 {
     grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
 
-    async_receiver_->start([=](ErrorCode err) {
+    async_receiver_->stop([=](ErrorCode err) {
         response->set_code(ErrorCodeCoreToProto(err));
         reactor->Finish(grpc::Status::OK);
     });
@@ -354,6 +357,16 @@ GrpcServer::SetFftWindow(grpc::CallbackServerContext* context,
     return reactor;
 }
 
+bool IsFftFrameStillValid(const FftFrame& frame)
+{
+    static constexpr int kMaxFramerate = 100;
+    static constexpr auto kMaxDuration =
+        std::chrono::milliseconds(1000) / kMaxFramerate;
+
+    return std::chrono::system_clock::now() - frame.timestamp.ToTimepoint() <=
+           kMaxDuration;
+}
+
 grpc::ServerUnaryReactor*
 GrpcServer::GetFftData(grpc::CallbackServerContext* context,
                        [[maybe_unused]] const google::protobuf::Empty* request,
@@ -361,41 +374,88 @@ GrpcServer::GetFftData(grpc::CallbackServerContext* context,
 {
     grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
 
-    // FIXME: This might fail if the fft frame size changed.
-    int fft_size = async_receiver_->getIqFftSize();
+    // Check if cached fft_frame is still valid.
+    do {
+        std::shared_lock<std::shared_mutex> lk{fft_mutex_};
 
-    std::unique_ptr<Receiver::FftFrame> fft_frame =
-        std::make_unique<Receiver::FftFrame>();
-    fft_frame->mutable_data()->Reserve(fft_size);
+        if (IsFftFrameStillValid(last_fft_frame_)) {
+            Receiver::FftFrame* fft_frame = new Receiver::FftFrame();
+            FftFrameCoreToProto(last_fft_frame_, fft_frame);
 
-    float* data = fft_frame->mutable_data()->mutable_data();
-    int size = fft_frame->mutable_data()->Capacity();
-
-    async_receiver_->getIqFftData(
-        data, size,
-        // Callback
-        [=, fft_frame = std::move(fft_frame)](
-            ErrorCode err, Timestamp timestamp, int64_t center_freq,
-            int sample_rate, [[maybe_unused]] float* data,
-            int fft_size) mutable {
-            response->set_code(ErrorCodeCoreToProto(err));
-
-            if (err != ErrorCode::OK) {
-                reactor->Finish(grpc::Status::OK);
-                return;
-            }
-
-            fft_frame->mutable_data()->AddNAlreadyReserved(fft_size);
-            fft_frame->set_allocated_timestamp(new google::protobuf::Timestamp(
-                TimestampCoreToProto(timestamp)));
-            fft_frame->set_center_freq(center_freq);
-            fft_frame->set_sample_rate(sample_rate);
-
-            response->set_allocated_fft_frame(fft_frame.release());
+            response->set_code(ErrorCodeCoreToProto(ErrorCode::OK));
+            response->set_allocated_fft_frame(fft_frame);
 
             reactor->Finish(grpc::Status::OK);
-        });
+            return reactor;
+        }
+    } while (false);
 
+    // We have to update the fft_frame since it's not valid.
+    bool expected = false;
+    const bool desired = true;
+    if (updating_fft_frame_.compare_exchange_strong(expected, desired)) {
+        // We're the thread that is going to update the fft frame.
+
+        // FIXME: This might fail if the fft frame size changed.
+        int fft_size = async_receiver_->getIqFftSize();
+        other_fft_frame_.fft_points.resize(fft_size);
+
+        async_receiver_->getIqFftData(
+            other_fft_frame_.fft_points.data(),
+            other_fft_frame_.fft_points.size(),
+            // Callback
+            [=, this](ErrorCode err, Timestamp timestamp, int64_t center_freq,
+                      int sample_rate, [[maybe_unused]] float* data,
+                      int fft_size) mutable {
+                // Here we have to set `updating_fft_frame_` to false to allow
+                // for other threads to update the frame, and we have to swap
+                // last_fft_frame and other_fft_frame before we set it to false
+                // if we succeeded.
+
+                response->set_code(ErrorCodeCoreToProto(err));
+
+                if (err != ErrorCode::OK) {
+                    updating_fft_frame_.store(false, std::memory_order_relaxed);
+
+                    reactor->Finish(grpc::Status::OK);
+                    return;
+                }
+
+                other_fft_frame_.sample_rate = sample_rate;
+                other_fft_frame_.center_freq = center_freq;
+                other_fft_frame_.timestamp = timestamp;
+                other_fft_frame_.fft_points.resize(fft_size);
+
+                Receiver::FftFrame* fft_frame = new Receiver::FftFrame();
+                FftFrameCoreToProto(other_fft_frame_, fft_frame);
+
+                response->set_code(ErrorCodeCoreToProto(ErrorCode::OK));
+                response->set_allocated_fft_frame(fft_frame);
+
+                reactor->Finish(grpc::Status::OK);
+
+                do {
+                    std::unique_lock lk{fft_mutex_};
+                    std::swap(last_fft_frame_, other_fft_frame_);
+                    updating_fft_frame_.store(false, std::memory_order_release);
+                } while (false);
+            });
+    } else {
+        // Fft frame is currently being updated.
+        // FIXME: We will return the old fft_frame for the sake of simplicity.
+        // but ideally, we should use a condition_variable and wait until the
+        // fft frame has been updated
+        Receiver::FftFrame* fft_frame = new Receiver::FftFrame();
+        do {
+            std::shared_lock<std::shared_mutex> lk{fft_mutex_};
+            FftFrameCoreToProto(last_fft_frame_, fft_frame);
+        } while (false);
+
+        response->set_code(ErrorCodeCoreToProto(ErrorCode::OK));
+        response->set_allocated_fft_frame(fft_frame);
+
+        reactor->Finish(grpc::Status::OK);
+    }
     return reactor;
 }
 
@@ -1136,9 +1196,8 @@ public:
     void OnWriteDone(bool ok) override
     {
         if (!ok) {
-            spdlog::info("Failed to send event to ({}). Unsubscribing him!",
+            spdlog::info("Failed to send event to ({}). Disconnecting...",
                          context_->peer());
-
             FinishIfNotAlreadyFinished(grpc::Status::OK);
             return;
         }
@@ -1156,7 +1215,7 @@ public:
 
     void OnDone() override
     {
-        spdlog::info("GrpcServer: Finished dealing with ({}). Self deleting!",
+        spdlog::info("GrpcServer: Finished dealing with ({})",
                      context_->peer());
         // Very scary!
         delete this;

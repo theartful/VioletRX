@@ -160,6 +160,8 @@ void PlotterGraphicsView::setMaxViewport(const QRectF& v)
 {
     maxViewport = v.normalized();
     Q_EMIT maxViewportChanged(maxViewport);
+
+    setViewport(sceneViewport);
 }
 
 QRectF PlotterGraphicsView::getMaxViewport() { return maxViewport; }

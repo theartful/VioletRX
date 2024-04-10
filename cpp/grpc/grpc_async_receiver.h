@@ -22,6 +22,7 @@ public:
     GrpcAsyncReceiver(std::string uri);
     ~GrpcAsyncReceiver() override;
 
+    void getDevices(Callback<std::vector<Device>>) const override;
     void subscribe(ReceiverEventHandler, Callback<Connection>) override;
     void unsubscribe(const Connection&) override;
 
@@ -78,6 +79,8 @@ public:
     std::string getIqRecordingPath() const override;
     bool isIqRecording() const override;
     std::vector<ReceiverEvent> getStateAsEvents() const override;
+
+    bool isRemote() const override { return true; }
 
 private:
     template <typename Function>

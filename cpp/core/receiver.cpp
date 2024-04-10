@@ -695,7 +695,10 @@ void receiver::remove_vfo_channel(vfo_channel::sptr vfo)
     if (it == vfo_channels.end())
         return;
 
-    tb->lock();
+    if (d_running) {
+        tb->stop();
+        tb->wait();
+    }
 
     disconnect_vfo_channels();
 
@@ -704,7 +707,9 @@ void receiver::remove_vfo_channel(vfo_channel::sptr vfo)
 
     connect_vfo_channels();
 
-    tb->unlock();
+    if (d_running) {
+        tb->start();
+    }
 }
 
 void receiver::disconnect_vfo_channels()
@@ -727,6 +732,11 @@ void receiver::connect_vfo_channels()
 const std::vector<vfo_channel::sptr>& receiver::get_vfo_channels()
 {
     return vfo_channels;
+}
+
+osmosdr::devices_t receiver::get_devices() const
+{
+    return osmosdr::device::find();
 }
 
 #ifdef _WIN32

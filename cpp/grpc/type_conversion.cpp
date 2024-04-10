@@ -45,7 +45,7 @@ ErrorCode ErrorCodeProtoToCore(Receiver::ErrorCode code)
     return static_cast<ErrorCode>(code);
 }
 
-Receiver::WindowType WindowTypeCoreToProto(WindowType code)
+Receiver::WindowType WindowCoreToProto(WindowType code)
 {
     // FIXME
     return static_cast<Receiver::WindowType>(code);
@@ -68,6 +68,32 @@ Timestamp TimestampProtoToCore(google::protobuf::Timestamp timestamp)
     Timestamp result;
     result.nanos = timestamp.nanos();
     result.seconds = timestamp.seconds();
+
+    return result;
+}
+
+void FftFrameCoreToProto(const FftFrame& frame, Receiver::FftFrame* proto_frame)
+{
+    int fft_size = frame.fft_points.size();
+    proto_frame->mutable_data()->Reserve(fft_size);
+    float* data = proto_frame->mutable_data()->mutable_data();
+    std::memcpy(data, frame.fft_points.data(), sizeof(float) * fft_size);
+    proto_frame->mutable_data()->AddNAlreadyReserved(fft_size);
+
+    proto_frame->set_allocated_timestamp(
+        new google::protobuf::Timestamp(TimestampCoreToProto(frame.timestamp)));
+
+    proto_frame->set_center_freq(frame.center_freq);
+    proto_frame->set_sample_rate(frame.sample_rate);
+
+    return;
+}
+
+Device DeviceProtoToCore(const Receiver::Device& proto_device)
+{
+    Device result;
+    result.label = proto_device.label();
+    result.devstr = proto_device.devstr();
 
     return result;
 }
@@ -486,8 +512,7 @@ bool EventCoreToProto(const Event& event, Receiver::Event* proto_event)
             },
             [&](const FftWindowChanged& ev) {
                 auto* proto_specific_event = new Receiver::FftWindowChanged();
-                proto_specific_event->set_window(
-                    WindowTypeCoreToProto(ev.window));
+                proto_specific_event->set_window(WindowCoreToProto(ev.window));
 
                 proto_event->set_allocated_fft_window_changed(
                     proto_specific_event);

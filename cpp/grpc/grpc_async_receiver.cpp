@@ -89,7 +89,7 @@ void GrpcAsyncReceiver::onReceiverEvent(const ReceiverEvent& event)
                 // Do nothing.
             },
             [&](const Unsubscribed&) {
-                // Will not handlet his now!
+                // Will not handlet this now!
             },
             [&](const Started&) { is_running_ = true; },
             [&](const Stopped&) { is_running_ = false; },
@@ -121,9 +121,8 @@ void GrpcAsyncReceiver::onReceiverEvent(const ReceiverEvent& event)
             },
             [&](const IqRecordingStopped&) { is_iq_recording_ = false; },
             [&](const VfoAdded& ev) { addVfoIfDoesntExist(ev.handle); },
-            [&](const VfoRemoved& ev) {
-                auto vfo = removeVfoIfExists(ev.handle);
-                vfo->prepareToDie(ev);
+            [&](const VfoRemoved&) {
+                // Will not handle this now!
             },
         },
         event);
@@ -132,11 +131,22 @@ void GrpcAsyncReceiver::onReceiverEvent(const ReceiverEvent& event)
 
     is_subscribed_ = !std::holds_alternative<Unsubscribed>(event);
     if (!is_subscribed_) {
+        spdlog::debug("Unsubscribed!! Disconnecting everything!!");
         signalStateChanged.disconnect_all_slots();
         for (auto& vfo : vfos_) {
             vfo->signalStateChanged.disconnect_all_slots();
         }
         vfos_.clear();
+    }
+
+    // Remove the vfo after we've notified that it's going to die to give a
+    // chance to handlers to still access it.
+    if (std::holds_alternative<VfoRemoved>(event)) {
+        const auto& ev = std::get<VfoRemoved>(event);
+        auto vfo = removeVfoIfExists(ev.handle);
+
+        VIOLET_ASSERT(vfo);
+        vfo->prepareToDie(ev);
     }
 }
 
@@ -170,20 +180,16 @@ void GrpcAsyncReceiver::onEvent(const Event& event)
     }
 }
 
-void subscribe(ReceiverEventHandler, Callback<Connection>)
+void GrpcAsyncReceiver::getDevices(Callback<std::vector<Device>> callback) const
 {
-    //
-}
-
-void unsubscribe(const Connection&)
-{
-    //
+    client_->GetDevices(std::move(callback));
 }
 
 void GrpcAsyncReceiver::start(Callback<> callback)
 {
-    client_->Start(std::move(callback));
-
+    // Note: We do not update the local state even the callback indicated
+    // success. Instead we only update the state from the events stream.
+    //
     // client_->Start(
     //     [this, callback = std::move(callback)](ErrorCode err) mutable {
     //         if (err == ErrorCode::OK) {
@@ -191,206 +197,67 @@ void GrpcAsyncReceiver::start(Callback<> callback)
     //         }
     //         INVOKE(callback, err);
     //     });
+
+    client_->Start(std::move(callback));
 }
 void GrpcAsyncReceiver::stop(Callback<> callback)
 {
     client_->Stop(std::move(callback));
-
-    // client_->Stop(
-    //     [this, callback = std::move(callback)](ErrorCode err) mutable {
-    //         if (err == ErrorCode::OK) {
-    //             is_running_ = false;
-    //         }
-    //         INVOKE(callback, err);
-    //     });
 }
 void GrpcAsyncReceiver::setInputDevice(std::string device, Callback<> callback)
 {
     client_->SetInputDevice(device, std::move(callback));
-
-    // client_->SetInputDevice(
-    //     device,
-    //     [this, device, callback = std::move(callback)](ErrorCode err) mutable
-    //     {
-    //         if (err == ErrorCode::OK) {
-    //             input_device_ = device;
-    //         }
-    //         INVOKE(callback, err);
-    //     });
 }
 void GrpcAsyncReceiver::setAntenna(std::string antenna, Callback<> callback)
 {
     client_->SetAntenna(antenna, std::move(callback));
-
-    // client_->SetAntenna(
-    //     antenna,
-    //     [this, antenna, callback = std::move(callback)](ErrorCode err)
-    //     mutable {
-    //         if (err == ErrorCode::OK) {
-    //             current_antenna_ = antenna;
-    //         }
-    //         INVOKE(callback, err);
-    //     });
 }
 void GrpcAsyncReceiver::setInputRate(int input_rate, Callback<int> callback)
 {
     client_->SetInputRate(input_rate, std::move(callback));
-
-    // client_->SetInputRate(input_rate, [this, callback = std::move(callback)](
-    //                                       ErrorCode err, int rate) mutable {
-    //     if (err == ErrorCode::OK) {
-    //         input_rate_ = rate;
-    //     }
-    //     INVOKE(callback, err, rate);
-    // });
 }
 void GrpcAsyncReceiver::setInputDecim(int decim, Callback<int> callback)
 {
     client_->SetInputDecim(decim, std::move(callback));
-
-    // client_->SetInputDecim(decim, [this, callback = std::move(callback)](
-    //                                   ErrorCode err, int decim) mutable {
-    //     if (err == ErrorCode::OK) {
-    //         input_decim_ = decim;
-    //     }
-
-    //     INVOKE(callback, err, decim);
-    // });
 }
 void GrpcAsyncReceiver::setIqSwap(bool enabled, Callback<> callback)
 {
     client_->SetIqSwap(enabled, std::move(callback));
-
-    // client_->SetIqSwap(enabled, [this, enabled, callback =
-    // std::move(callback)](
-    //                                 ErrorCode err) mutable {
-    //     if (err == ErrorCode::OK) {
-    //         iq_swap_ = enabled;
-    //     }
-
-    //     INVOKE(callback, err);
-    // });
 }
 void GrpcAsyncReceiver::setDcCancel(bool enabled, Callback<> callback)
 {
     client_->SetDcCancel(enabled, std::move(callback));
-
-    // client_->SetDcCancel(
-    //     enabled,
-    //     [this, enabled, callback = std::move(callback)](ErrorCode err)
-    //     mutable {
-    //         if (err == ErrorCode::OK) {
-    //             dc_cancel_ = enabled;
-    //         }
-
-    //         INVOKE(callback, err);
-    //     });
 }
 void GrpcAsyncReceiver::setIqBalance(bool enabled, Callback<> callback)
 {
     client_->SetIqBalance(enabled, std::move(callback));
-
-    // client_->SetIqBalance(
-    //     enabled,
-    //     [this, enabled, callback = std::move(callback)](ErrorCode err)
-    //     mutable {
-    //         if (err == ErrorCode::OK) {
-    //             iq_balance_ = enabled;
-    //         }
-
-    //         INVOKE(callback, err);
-    //     });
 }
 void GrpcAsyncReceiver::setRfFreq(int64_t freq, Callback<int64_t> callback)
 {
     client_->SetRfFreq(freq, std::move(callback));
-
-    // client_->SetRfFreq(freq, [this, callback = std::move(callback)](
-    //                              ErrorCode err, int64_t freq) mutable {
-    //     if (err == ErrorCode::OK) {
-    //         rf_freq_ = freq;
-    //     }
-
-    //     INVOKE(callback, err, freq);
-    // });
 }
 void GrpcAsyncReceiver::setAutoGain(bool enabled, Callback<> callback)
 {
     client_->SetAutoGain(enabled, std::move(callback));
-
-    // client_->SetAutoGain(
-    //     enabled,
-    //     [this, enabled, callback = std::move(callback)](ErrorCode err)
-    //     mutable {
-    //         if (err == ErrorCode::OK) {
-    //             auto_gain_ = enabled;
-    //         }
-
-    //         INVOKE(callback, err);
-    //     });
 }
 void GrpcAsyncReceiver::setGain(std::string name, double value,
                                 Callback<double> callback)
 {
     client_->SetGain(name, value, std::move(callback));
-
-    // client_->SetGain(name, value,
-    //                  [this, name, callback = std::move(callback)](
-    //                      ErrorCode err, double value) mutable {
-    //                      if (err == ErrorCode::OK) {
-    //                          for (GainStage& gain_stage : gain_stages_) {
-    //                              if (gain_stage.name == name) {
-    //                                  gain_stage.value = value;
-    //                                  break;
-    //                              }
-    //                          }
-    //                      }
-
-    //                      INVOKE(callback, err, value);
-    //                  });
 }
 void GrpcAsyncReceiver::setFreqCorr(double ppm, Callback<double> callback)
 {
     client_->SetFreqCorr(ppm, std::move(callback));
-
-    // client_->SetFreqCorr(ppm, [this, callback = std::move(callback)](
-    //                               ErrorCode err, double ppm) mutable {
-    //     if (err == ErrorCode::OK) {
-    //         freq_corr_ = ppm;
-    //     }
-
-    //     INVOKE(callback, err, ppm);
-    // });
 }
 
 void GrpcAsyncReceiver::setIqFftSize(int size, Callback<> callback)
 {
     client_->SetFftSize(size, std::move(callback));
-
-    // client_->SetFftSize(size, [this, size, callback = std::move(callback)](
-    //                               ErrorCode err) mutable {
-    //     if (err == ErrorCode::OK) {
-    //         iq_fft_size_ = size;
-    //     }
-
-    //     INVOKE(callback, err);
-    // });
 }
 void GrpcAsyncReceiver::setIqFftWindow(WindowType window_type, bool,
                                        Callback<> callback)
 {
     client_->SetFftWindow(window_type, std::move(callback));
-
-    // client_->SetFftWindow(window_type,
-    //                       [this, window_type, callback =
-    //                       std::move(callback)](
-    //                           ErrorCode err) mutable {
-    //                           if (err == ErrorCode::OK) {
-    //                               iq_fft_window_ = window_type;
-    //                           }
-
-    //                           INVOKE(callback, err);
-    //                       });
 }
 void GrpcAsyncReceiver::getIqFftData(
     float* data, int size,
@@ -604,6 +471,18 @@ void GrpcAsyncReceiver::synchronize(Callback<> callback)
     });
 }
 
-GrpcAsyncReceiver::~GrpcAsyncReceiver() {}
+GrpcAsyncReceiver::~GrpcAsyncReceiver()
+{
+    spdlog::debug("~GrpcAsyncReceiver");
+
+    // If we didn't manually delete the worker thread, then after this
+    // destructor is finished, the worker thread will be deleted, and while it
+    // is being deleted it might be running a task having a reference of the
+    // this object, which will be an error.
+    if (worker_thread_->isJoinable()) {
+        worker_thread_->stop();
+        worker_thread_->join();
+    }
+}
 
 } // namespace violetrx

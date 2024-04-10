@@ -468,6 +468,7 @@ Q_SIGNALS:
     void hwFreqChanged(qint64);
     void autoGainChanged(bool);
     void gainChanged(const QString& name, double value);
+    void gainStagesChanged(const QList<GainStage>&);
     void freqCorrChanged(double ppm);
     void iqFftSizeChanged(int newsize);
     void iqFftWindowChanged(WindowType window_type, bool normalize_energy);
@@ -536,7 +537,8 @@ private:
     void onIqRecordingStarted(std::string);
     void onIqRecordingStopped();
     void onVfoAdded(violetrx::AsyncVfoIfaceSptr);
-    void onVfoRemoved(violetrx::AsyncVfoIfaceSptr);
+    void onVfoRemoved(uint64_t);
+    void onVfoRemoved(VFOChannelModel*);
 
     VFOChannelModel* addVfoIfDoesntExist(violetrx::AsyncVfoIfaceSptr);
 

@@ -2,6 +2,7 @@
 #define VIOLETRX_GRPC_SERVER_H
 
 #include <memory>
+#include <shared_mutex>
 #include <string>
 
 #include <boost/signals2.hpp>
@@ -9,6 +10,7 @@
 #include <unordered_map>
 
 #include "async_core/async_receiver_iface.h"
+#include "async_core/types.h"
 #include "receiver.grpc.pb.h"
 
 namespace violetrx
@@ -282,6 +284,13 @@ private:
     // thread, which is true but maybe it's time to extend the broadcast queue
     // to be multiple producer?
     broadcast_queue::sender<Event> events_queue_;
+
+    // Fft caching
+    FftFrame last_fft_frame_;
+    FftFrame other_fft_frame_; // Ping-ponging between two fft frames
+
+    std::shared_mutex fft_mutex_;
+    std::atomic<bool> updating_fft_frame_;
 };
 
 } // namespace violetrx

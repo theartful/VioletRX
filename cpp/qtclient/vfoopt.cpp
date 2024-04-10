@@ -2,8 +2,10 @@
 #include "ui_vfoopt.h"
 
 #include <QMessageBox>
-#include <QSettings>
 #include <QVariant>
+
+#include <spdlog/fmt/fmt.h>
+#include <spdlog/spdlog.h>
 
 #include <cmath>
 #include <optional>
@@ -12,7 +14,6 @@
 #include "receiver_model.h"
 
 #include "qtclient/expandablewidget.h"
-#include <spdlog/fmt/fmt.h>
 
 #define FILTER_PRESET_WIDE 0
 #define FILTER_PRESET_NORMAL 1
@@ -404,10 +405,14 @@ void VfoOpt::on_agcButton_clicked() { agcOpt->show(); }
 
 void VfoOpt::on_autoSquelchButton_clicked()
 {
-    vfo->getSignalPower().then(this, [this](float pwr) {
-        pwr += 3.0;
-        vfo->setSqlLevel(pwr);
-    });
+    vfo->getSignalPower()
+        .then(this,
+              [this](float pwr) {
+                  pwr += 3.0;
+                  vfo->setSqlLevel(pwr);
+              })
+        .onFailed(
+            [](const std::exception& e) { spdlog::error("{}", e.what()); });
 }
 
 void VfoOpt::on_sqlSpinBox_valueChanged(double value)
@@ -494,8 +499,12 @@ void VfoOpt::onSignalPowerTimerTimeout()
     if (!signalPower.isFinished())
         return;
 
-    float pwr = signalPower.takeResult();
-    ui->meter->setLevel(pwr);
+    try {
+        float pwr = signalPower.takeResult();
+        ui->meter->setLevel(pwr);
+    } catch (const std::exception& e) {
+        spdlog::error("{}", e.what());
+    }
 }
 
 void VfoOpt::onNoiseBlankerOnChanged() { refreshNoiseBlankerButtons(); }
@@ -717,9 +726,10 @@ void VfoOpt::rdsTimeout()
                 waitingForRds = false;
                 updateRds(rdsData);
             })
-            .onFailed([this]() {
+            .onFailed([this](const std::exception& e) {
                 waitingForRds = false;
                 // TODO
+                spdlog::error("{}", e.what());
             });
     }
 }

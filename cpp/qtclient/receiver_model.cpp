@@ -1,7 +1,5 @@
 #include <algorithm>
-#include <chrono>
 #include <exception>
-#include <functional>
 #include <stdexcept>
 #include <variant>
 
@@ -124,7 +122,7 @@ void ReceiverModel::onStateChanged(const void* event_erased)
                 INVOKE_METHOD(onInputRateChanged(ev.input_rate));
             },
             [&](const RfFreqChanged& ev) {
-                INVOKE_METHOD(onInputRateChanged(ev.freq));
+                INVOKE_METHOD(onRfFreqChanged(ev.freq));
             },
             [&](const InputDecimChanged& ev) {
                 INVOKE_METHOD(onInputDecimChanged(ev.decim));
@@ -159,7 +157,7 @@ void ReceiverModel::onStateChanged(const void* event_erased)
             },
             [&](const VfoRemoved& ev) {
                 auto vfo = rx->getVfo(ev.handle);
-                INVOKE_METHOD(onVfoRemoved(vfo));
+                INVOKE_METHOD(onVfoRemoved(ev.handle));
             },
             [&](const IqRecordingStarted& ev) {
                 INVOKE_METHOD(onIqRecordingStarted(ev.path));
@@ -366,27 +364,26 @@ QFuture<void> ReceiverModel::getIqFftData(FftFrame* frame)
 
     frame->fft_points.resize(m_fftSize);
 
-    auto callback = [promise = std::move(promise),
-                     frame](violetrx::ErrorCode code,
-                            violetrx::Timestamp timestamp, int64_t centerFreq,
-                            int sample_rate, float*, int size) mutable {
-        if (code == violetrx::ErrorCode::OK) {
-            frame->timestamp = timestamp;
-            frame->center_freq = centerFreq;
-            frame->sample_rate = sample_rate;
-            frame->fft_points.resize(size);
+    rx->getIqFftData( //
+        frame->fft_points.data(), m_fftSize,
+        [promise = std::move(promise),
+         frame](violetrx::ErrorCode code, violetrx::Timestamp timestamp,
+                int64_t centerFreq, int sample_rate, float*, int size) mutable {
+            if (code == violetrx::ErrorCode::OK) {
+                frame->timestamp = timestamp;
+                frame->center_freq = centerFreq;
+                frame->sample_rate = sample_rate;
+                frame->fft_points.resize(size);
 
-            promise.start();
-            promise.finish();
+                promise.start();
+                promise.finish();
 
-        } else {
-            promise.start();
-            promise.setException(makeException(code));
-            promise.finish();
-        }
-    };
-
-    rx->getIqFftData(frame->fft_points.data(), m_fftSize, std::move(callback));
+            } else {
+                promise.start();
+                promise.setException(makeException(code));
+                promise.finish();
+            }
+        });
 
     return future;
 }
@@ -477,7 +474,20 @@ QFuture<void> ReceiverModel::removeVFOChannel(VFOChannelModel* vfo)
 }
 
 void ReceiverModel::onSubscribed() { Q_EMIT subscribed(); }
-void ReceiverModel::onUnsubscribed() { Q_EMIT unsubscribed(); }
+void ReceiverModel::onUnsubscribed()
+{
+    spdlog::debug("ReceivereModel::onUnsubscribed");
+
+    for (VFOChannelModel* vfoModel : vfos) {
+        vfoModel->prepareToDie();
+        Q_EMIT vfoRemoved(vfoModel);
+
+        vfoModel->deleteLater();
+    }
+    vfos.clear();
+
+    Q_EMIT unsubscribed();
+}
 void ReceiverModel::onSyncStart()
 {
     //
@@ -551,6 +561,8 @@ void ReceiverModel::onGainStagesChanged(
 
         });
     }
+
+    Q_EMIT gainStagesChanged(m_gainStages);
 }
 void ReceiverModel::onAntennasChanged(std::vector<std::string> antennas_std)
 {
@@ -607,15 +619,15 @@ void ReceiverModel::onVfoAdded(violetrx::AsyncVfoIfaceSptr vfo)
 {
     addVfoIfDoesntExist(vfo);
 }
-void ReceiverModel::onVfoRemoved(violetrx::AsyncVfoIfaceSptr vfo)
+void ReceiverModel::onVfoRemoved(uint64_t handle)
 {
     auto it = std::find_if(vfos.begin(), vfos.end(), [&](auto& vfoModel) {
-        return vfoModel->getId() == vfo->getId();
+        return vfoModel->getId() == handle;
     });
 
     if (it == vfos.end()) {
         spdlog::error("Attempted to remove vfo with id {} but did not find it!",
-                      vfo->getId());
+                      handle);
         return;
     }
 

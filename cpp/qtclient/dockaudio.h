@@ -25,7 +25,6 @@
 
 #include <QColor>
 #include <QDockWidget>
-#include <QSettings>
 #include "audio_options.h"
 
 namespace Ui {
@@ -55,9 +54,6 @@ public:
 
     void setAudioRecButtonState(bool checked);
     void setAudioPlayButtonState(bool checked);
-
-    void saveSettings(QSettings *settings);
-    void readSettings(QSettings *settings);
 
 public slots:
     void startAudioRecorder(void);

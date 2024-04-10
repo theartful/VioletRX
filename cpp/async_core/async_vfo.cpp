@@ -274,12 +274,21 @@ void AsyncVfo::setFilterOffset(int64_t offset, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, offset, callback = std::move(callback)]() mutable {
-        bool result = vfo->set_filter_offset((double)offset);
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, offset, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        bool result = sptr->vfo->set_filter_offset((double)offset);
         if (result) {
             CALLBACK_ON_SUCCESS();
-            vfo->reset_rds_parser();
-            stateChanged<OffsetChanged>();
+            sptr->vfo->reset_rds_parser();
+            sptr->stateChanged<OffsetChanged>();
         } else {
             CALLBACK_ON_ERROR(INVALID_FILTER_OFFSET);
         }
@@ -302,18 +311,27 @@ void AsyncVfo::setFilter(int64_t low, int64_t high, FilterShape filter_shape,
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, low, high, filter_shape,
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, low, high, filter_shape,
               callback = std::move(callback)]() mutable {
-        if (!isValidFilter(low, high)) {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        if (!sptr->isValidFilter(low, high)) {
             CALLBACK_ON_ERROR(INVALID_FILTER);
             return;
         }
 
-        bool result = vfo->set_filter((double)low, (double)high,
-                                      (vfo_channel::filter_shape)filter_shape);
+        bool result = sptr->vfo->set_filter(
+            (double)low, (double)high, (vfo_channel::filter_shape)filter_shape);
         if (result) {
             CALLBACK_ON_SUCCESS();
-            stateChanged<FilterChanged>();
+            sptr->stateChanged<FilterChanged>();
         } else {
             CALLBACK_ON_ERROR(INVALID_FILTER);
             return;
@@ -324,11 +342,20 @@ void AsyncVfo::setCwOffset(int64_t offset, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, offset, callback = std::move(callback)]() mutable {
-        bool result = vfo->set_cw_offset(offset);
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, offset, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        bool result = sptr->vfo->set_cw_offset(offset);
         if (result) {
             CALLBACK_ON_SUCCESS();
-            stateChanged<CwOffsetChanged>();
+            sptr->stateChanged<CwOffsetChanged>();
         } else {
             CALLBACK_ON_ERROR(INVALID_CW_OFFSET);
             return;
@@ -339,8 +366,17 @@ void AsyncVfo::setDemod(Demod demod, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, demod, callback = std::move(callback)]() mutable {
-        if (m_demod == demod) {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, demod, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        if (sptr->m_demod == demod) {
             CALLBACK_ON_SUCCESS();
             return;
         }
@@ -350,75 +386,75 @@ void AsyncVfo::setDemod(Demod demod, Callback<> callback)
             return;
         }
 
-        if (vfo->is_rds_decoder_active())
-            stopRdsDecoder();
+        if (sptr->vfo->is_rds_decoder_active())
+            sptr->stopRdsDecoder();
 
-        if (vfo->is_recording_audio()) {
-            stopAudioRecording();
+        if (sptr->vfo->is_recording_audio()) {
+            sptr->stopAudioRecording();
         }
 
         bool result = false;
         switch (demod) {
         case Demod::OFF:
-            if (vfo->is_recording_audio()) {
-                stopAudioRecording();
+            if (sptr->vfo->is_recording_audio()) {
+                sptr->stopAudioRecording();
             }
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_OFF);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_OFF);
             break;
 
         case Demod::RAW:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_NONE);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_NONE);
             break;
 
         case Demod::AM:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_AM);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_AM);
             if (result) {
-                vfo->set_am_dcr(m_amDcr);
+                sptr->vfo->set_am_dcr(sptr->m_amDcr);
             }
             break;
 
         case Demod::AM_SYNC:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_AMSYNC);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_AMSYNC);
             if (result) {
-                vfo->set_amsync_dcr(m_amSyncDcr);
-                vfo->set_amsync_pll_bw(m_amSyncPllBw);
+                sptr->vfo->set_amsync_dcr(sptr->m_amSyncDcr);
+                sptr->vfo->set_amsync_pll_bw(sptr->m_amSyncPllBw);
             }
             break;
 
         case Demod::NFM:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_NFM);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_NFM);
             if (result) {
-                vfo->set_fm_deemph(m_fmDeemph);
-                vfo->set_fm_maxdev(m_fmMaxDev);
+                sptr->vfo->set_fm_deemph(sptr->m_fmDeemph);
+                sptr->vfo->set_fm_maxdev(sptr->m_fmMaxDev);
             }
             break;
 
         case Demod::WFM_MONO:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_WFM_M);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_WFM_M);
             break;
 
         case Demod::WFM_STEREO:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_WFM_S);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_WFM_S);
             break;
 
         case Demod::WFM_STEREO_OIRT:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_WFM_S_OIRT);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_WFM_S_OIRT);
             break;
 
         case Demod::LSB:
         case Demod::USB:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_SSB);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_SSB);
             break;
         case Demod::CWL:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_SSB);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_SSB);
             if (result) {
-                vfo->set_cw_offset(vfo->get_cw_offset());
+                sptr->vfo->set_cw_offset(sptr->vfo->get_cw_offset());
             }
             break;
         case Demod::CWU:
-            result = vfo->set_demod(vfo_channel::RX_DEMOD_SSB);
+            result = sptr->vfo->set_demod(vfo_channel::RX_DEMOD_SSB);
             if (result) {
-                vfo->set_cw_offset(vfo->get_cw_offset());
+                sptr->vfo->set_cw_offset(sptr->vfo->get_cw_offset());
             }
             break;
 
@@ -429,42 +465,43 @@ void AsyncVfo::setDemod(Demod demod, Callback<> callback)
         }
 
         // reset agc options
-        vfo->set_agc_on(m_agcOn);
-        vfo->set_agc_hang(m_agcHang);
-        vfo->set_agc_threshold(m_agcThreshold);
-        vfo->set_agc_slope(m_agcSlope);
-        vfo->set_agc_decay(m_agcDecay);
-        vfo->set_agc_manual_gain(m_agcManualGain);
+        sptr->vfo->set_agc_on(sptr->m_agcOn);
+        sptr->vfo->set_agc_hang(sptr->m_agcHang);
+        sptr->vfo->set_agc_threshold(sptr->m_agcThreshold);
+        sptr->vfo->set_agc_slope(sptr->m_agcSlope);
+        sptr->vfo->set_agc_decay(sptr->m_agcDecay);
+        sptr->vfo->set_agc_manual_gain(sptr->m_agcManualGain);
 
         // reset squelch
-        vfo->set_sql_level(m_sqlLevel);
-        vfo->set_sql_alpha(m_sqlAlpha);
+        sptr->vfo->set_sql_level(sptr->m_sqlLevel);
+        sptr->vfo->set_sql_alpha(sptr->m_sqlAlpha);
 
         // reset noise blanker
-        vfo->set_nb_on(1, m_nb1On);
-        vfo->set_nb_threshold(1, m_nb1Threshold);
-        vfo->set_nb_on(2, m_nb2On);
-        vfo->set_nb_threshold(2, m_nb2Threshold);
+        sptr->vfo->set_nb_on(1, sptr->m_nb1On);
+        sptr->vfo->set_nb_threshold(1, sptr->m_nb1Threshold);
+        sptr->vfo->set_nb_on(2, sptr->m_nb2On);
+        sptr->vfo->set_nb_threshold(2, sptr->m_nb2Threshold);
 
         // reset rds options
-        vfo->reset_rds_parser();
+        sptr->vfo->reset_rds_parser();
 
-        m_demod = demod;
+        sptr->m_demod = demod;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<DemodChanged>();
+        sptr->stateChanged<DemodChanged>();
 
         bool invalidFilter = true;
-        if (isValidFilter(vfo->get_filter_low(), vfo->get_filter_high())) {
-            bool result =
-                vfo->set_filter(vfo->get_filter_low(), vfo->get_filter_high(),
-                                vfo->get_filter_shape());
+        if (sptr->isValidFilter(sptr->vfo->get_filter_low(),
+                                sptr->vfo->get_filter_high())) {
+            bool result = sptr->vfo->set_filter(sptr->vfo->get_filter_low(),
+                                                sptr->vfo->get_filter_high(),
+                                                sptr->vfo->get_filter_shape());
             if (result)
                 invalidFilter = false;
         }
 
         if (invalidFilter) {
-            setDefaultFilter();
+            sptr->setDefaultFilter();
         }
     });
 }
@@ -504,8 +541,17 @@ void AsyncVfo::getSignalPwr(Callback<float> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, callback = std::move(callback)]() mutable {
-        CALLBACK_ON_SUCCESS(vfo->get_signal_pwr());
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        CALLBACK_ON_SUCCESS(sptr->vfo->get_signal_pwr());
     });
 }
 
@@ -514,17 +560,26 @@ void AsyncVfo::setNoiseBlanker(int nbid, bool on, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, nbid, on, callback = std::move(callback)]() mutable {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, nbid, on, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
         if (nbid == 1) {
-            vfo->set_nb_on(nbid, on);
-            m_nb1On = on;
+            sptr->vfo->set_nb_on(nbid, on);
+            sptr->m_nb1On = on;
             CALLBACK_ON_SUCCESS();
-            stateChanged<NoiseBlankerOnChanged>(nbid, on);
+            sptr->stateChanged<NoiseBlankerOnChanged>(nbid, on);
         } else if (nbid == 2) {
-            vfo->set_nb_on(nbid, on);
-            m_nb2On = on;
+            sptr->vfo->set_nb_on(nbid, on);
+            sptr->m_nb2On = on;
             CALLBACK_ON_SUCCESS();
-            stateChanged<NoiseBlankerOnChanged>(nbid, on);
+            sptr->stateChanged<NoiseBlankerOnChanged>(nbid, on);
         } else {
             CALLBACK_ON_ERROR(INVALID_NOISE_BLANKER_ID);
         }
@@ -535,17 +590,26 @@ void AsyncVfo::setNoiseBlankerThreshold(int nbid, float threshold,
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, nbid, threshold, callback = std::move(callback)]() mutable {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, nbid, threshold, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
         if (nbid == 1) {
-            vfo->set_nb_threshold(nbid, threshold);
-            m_nb1Threshold = threshold;
+            sptr->vfo->set_nb_threshold(nbid, threshold);
+            sptr->m_nb1Threshold = threshold;
             CALLBACK_ON_SUCCESS();
-            stateChanged<NoiseBlankerThresholdChanged>(nbid, threshold);
+            sptr->stateChanged<NoiseBlankerThresholdChanged>(nbid, threshold);
         } else if (nbid == 2) {
-            vfo->set_nb_threshold(nbid, threshold);
-            m_nb2Threshold = threshold;
+            sptr->vfo->set_nb_threshold(nbid, threshold);
+            sptr->m_nb2Threshold = threshold;
             CALLBACK_ON_SUCCESS();
-            stateChanged<NoiseBlankerThresholdChanged>(nbid, threshold);
+            sptr->stateChanged<NoiseBlankerThresholdChanged>(nbid, threshold);
         } else {
             CALLBACK_ON_ERROR(INVALID_NOISE_BLANKER_ID);
         }
@@ -556,12 +620,21 @@ void AsyncVfo::setSqlLevel(double level_db, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, level_db, callback = std::move(callback)]() mutable {
-        vfo->set_sql_level(level_db);
-        m_sqlLevel = level_db;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, level_db, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_sql_level(level_db);
+        sptr->m_sqlLevel = level_db;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<SqlLevelChanged>();
+        sptr->stateChanged<SqlLevelChanged>();
     });
 }
 
@@ -569,12 +642,21 @@ void AsyncVfo::setSqlAlpha(double alpha, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, alpha, callback = std::move(callback)]() mutable {
-        vfo->set_sql_alpha(alpha);
-        m_sqlAlpha = alpha;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, alpha, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_sql_alpha(alpha);
+        sptr->m_sqlAlpha = alpha;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<SqlAlphaChanged>();
+        sptr->stateChanged<SqlAlphaChanged>();
     });
 }
 
@@ -582,72 +664,126 @@ void AsyncVfo::setAgcOn(bool enable, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, enable, callback = std::move(callback)]() mutable {
-        vfo->set_agc_on(enable);
-        m_agcOn = enable;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, enable, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_agc_on(enable);
+        sptr->m_agcOn = enable;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AgcOnChanged>();
+        sptr->stateChanged<AgcOnChanged>();
     });
 }
 void AsyncVfo::setAgcHang(bool enable, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, enable, callback = std::move(callback)]() mutable {
-        vfo->set_agc_hang(enable);
-        m_agcHang = enable;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, enable, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_agc_hang(enable);
+        sptr->m_agcHang = enable;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AgcHangChanged>();
+        sptr->stateChanged<AgcHangChanged>();
     });
 }
 void AsyncVfo::setAgcThreshold(int threshold, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, threshold, callback = std::move(callback)]() mutable {
-        vfo->set_agc_threshold(threshold);
-        m_agcThreshold = threshold;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, threshold, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_agc_threshold(threshold);
+        sptr->m_agcThreshold = threshold;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AgcThresholdChanged>();
+        sptr->stateChanged<AgcThresholdChanged>();
     });
 }
 void AsyncVfo::setAgcSlope(int slope, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, slope, callback = std::move(callback)]() mutable {
-        vfo->set_agc_slope(slope);
-        m_agcSlope = slope;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, slope, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_agc_slope(slope);
+        sptr->m_agcSlope = slope;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AgcSlopeChanged>();
+        sptr->stateChanged<AgcSlopeChanged>();
     });
 }
 void AsyncVfo::setAgcDecay(int decay, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, decay, callback = std::move(callback)]() mutable {
-        vfo->set_agc_decay(decay);
-        m_agcDecay = decay;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, decay, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_agc_decay(decay);
+        sptr->m_agcDecay = decay;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AgcDecayChanged>();
+        sptr->stateChanged<AgcDecayChanged>();
     });
 }
 void AsyncVfo::setAgcManualGain(int gain, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, gain, callback = std::move(callback)]() mutable {
-        vfo->set_agc_manual_gain(gain);
-        m_agcManualGain = gain;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, gain, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_agc_manual_gain(gain);
+        sptr->m_agcManualGain = gain;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AgcManualGainChanged>();
+        sptr->stateChanged<AgcManualGainChanged>();
     });
 }
 
@@ -655,60 +791,105 @@ void AsyncVfo::setFmMaxDev(float maxdev, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, maxdev, callback = std::move(callback)]() mutable {
-        vfo->set_fm_maxdev(maxdev);
-        m_fmMaxDev = maxdev;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, maxdev, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_fm_maxdev(maxdev);
+        sptr->m_fmMaxDev = maxdev;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<FmMaxDevChanged>();
+        sptr->stateChanged<FmMaxDevChanged>();
     });
 }
 void AsyncVfo::setFmDeemph(double tau, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, tau, callback = std::move(callback)]() mutable {
-        vfo->set_fm_deemph(tau);
-        m_fmDeemph = tau;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, tau, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_fm_deemph(tau);
+        sptr->m_fmDeemph = tau;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<FmDeemphChanged>();
+        sptr->stateChanged<FmDeemphChanged>();
     });
 }
 void AsyncVfo::setAmDcr(bool enable, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, enable, callback = std::move(callback)]() mutable {
-        vfo->set_am_dcr(enable);
-        m_amDcr = enable;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, enable, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_am_dcr(enable);
+        sptr->m_amDcr = enable;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AmDcrChanged>();
+        sptr->stateChanged<AmDcrChanged>();
     });
 }
 void AsyncVfo::setAmSyncDcr(bool enable, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, enable, callback = std::move(callback)]() mutable {
-        vfo->set_amsync_dcr(enable);
-        m_amSyncDcr = enable;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, enable, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_amsync_dcr(enable);
+        sptr->m_amSyncDcr = enable;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AmSyncDcrChanged>();
+        sptr->stateChanged<AmSyncDcrChanged>();
     });
 }
 void AsyncVfo::setAmSyncPllBw(float bw, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, bw, callback = std::move(callback)]() mutable {
-        vfo->set_amsync_pll_bw(bw);
-        m_amSyncPllBw = bw;
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, bw, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_amsync_pll_bw(bw);
+        sptr->m_amSyncPllBw = bw;
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AmSyncPllBwChanged>();
+        sptr->stateChanged<AmSyncPllBwChanged>();
     });
 }
 
@@ -717,22 +898,31 @@ void AsyncVfo::startAudioRecording(const std::string& filename,
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, filename, callback = std::move(callback)]() mutable {
-        if (vfo->is_recording_audio()) {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, filename, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        if (sptr->vfo->is_recording_audio()) {
             CALLBACK_ON_ERROR(ALREADY_RECORDING);
             return;
-        } else if (m_demod == Demod::OFF) {
+        } else if (sptr->m_demod == Demod::OFF) {
             CALLBACK_ON_ERROR(DEMOD_IS_OFF);
             return;
-        } else if (!vfo->get_parent_receiver()->is_running()) {
+        } else if (!sptr->vfo->get_parent_receiver()->is_running()) {
             CALLBACK_ON_ERROR(NOT_RUNNING);
             return;
         }
 
-        bool result = vfo->start_audio_recording(filename);
+        bool result = sptr->vfo->start_audio_recording(filename);
         if (result) {
             CALLBACK_ON_SUCCESS();
-            stateChanged<RecordingStarted>();
+            sptr->stateChanged<RecordingStarted>();
         } else {
             // FIXME: start_audio_recording should indicate this!
             CALLBACK_ON_ERROR(COULDNT_CREATE_FILE);
@@ -743,27 +933,45 @@ void AsyncVfo::stopAudioRecording(Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, callback = std::move(callback)]() mutable {
-        if (!vfo->is_recording_audio()) {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        if (!sptr->vfo->is_recording_audio()) {
             CALLBACK_ON_ERROR(ALREADY_NOT_RECORDING);
             return;
         }
 
-        vfo->stop_audio_recording();
+        sptr->vfo->stop_audio_recording();
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<RecordingStopped>();
+        sptr->stateChanged<RecordingStopped>();
     });
 }
 void AsyncVfo::setAudioGain(float gain, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, gain, callback = std::move(callback)]() mutable {
-        vfo->set_af_gain(gain);
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, gain, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->set_af_gain(gain);
 
         CALLBACK_ON_SUCCESS();
-        stateChanged<AudioGainChanged>();
+        sptr->stateChanged<AudioGainChanged>();
     });
 }
 
@@ -772,13 +980,22 @@ void AsyncVfo::startUdpStreaming(const std::string& host, int port, bool stereo,
 {
     RETURN_IF_WORKER_BUSY();
 
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
     schedule(
-        [this, host, port, stereo, callback = std::move(callback)]() mutable {
+        [self, host, port, stereo, callback = std::move(callback)]() mutable {
+            auto sptr = self.lock();
+            if (!sptr || sptr->m_removed) {
+                CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+                return;
+            }
+
             // FIXME: we should validate host/port
-            vfo->start_udp_streaming(host, port, stereo);
+            sptr->vfo->start_udp_streaming(host, port, stereo);
             CALLBACK_ON_SUCCESS();
 
-            stateChanged<UdpStreamingStarted>();
+            sptr->stateChanged<UdpStreamingStarted>();
         });
 }
 
@@ -786,12 +1003,21 @@ void AsyncVfo::stopUdpStreaming(Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, callback = std::move(callback)]() mutable {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
         // FIXME: we should validate host/port
-        vfo->stop_udp_streaming();
+        sptr->vfo->stop_udp_streaming();
         CALLBACK_ON_SUCCESS();
 
-        stateChanged<UdpStreamingStopped>();
+        sptr->stateChanged<UdpStreamingStopped>();
     });
 }
 
@@ -799,35 +1025,53 @@ void AsyncVfo::startSniffer(int samplerate, int buffsize, Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
     schedule(
-        [this, samplerate, buffsize, callback = std::move(callback)]() mutable {
-            if (vfo->is_snifffer_active()) {
+        [self, samplerate, buffsize, callback = std::move(callback)]() mutable {
+            auto sptr = self.lock();
+            if (!sptr || sptr->m_removed) {
+                CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+                return;
+            }
+
+            if (sptr->vfo->is_snifffer_active()) {
                 CALLBACK_ON_ERROR(SNIFFER_ALREADY_ACTIVE);
                 return;
             }
 
-            vfo->start_sniffer(samplerate, buffsize);
+            sptr->vfo->start_sniffer(samplerate, buffsize);
 
             CALLBACK_ON_SUCCESS();
 
-            stateChanged<SnifferStarted>();
+            sptr->stateChanged<SnifferStarted>();
         });
 }
 void AsyncVfo::stopSniffer(Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, callback = std::move(callback)]() mutable {
-        if (!vfo->is_snifffer_active()) {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        if (!sptr->vfo->is_snifffer_active()) {
             CALLBACK_ON_ERROR(SNIFFER_ALREADY_INACTIVE);
             return;
         }
 
-        vfo->stop_sniffer();
+        sptr->vfo->stop_sniffer();
 
         CALLBACK_ON_SUCCESS();
 
-        stateChanged<SnifferStopped>();
+        sptr->stateChanged<SnifferStopped>();
     });
 }
 void AsyncVfo::getSnifferData(float* data, int size,
@@ -835,21 +1079,30 @@ void AsyncVfo::getSnifferData(float* data, int size,
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, data, size, callback = std::move(callback)]() mutable {
-        if (!vfo->is_snifffer_active()) {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, data, size, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        if (!sptr->vfo->is_snifffer_active()) {
             CALLBACK_ON_ERROR(SNIFFER_ALREADY_INACTIVE);
             return;
         }
 
         if (data == nullptr) {
-            data = new float[vfo->get_sniffer_buffsize()];
-        } else if (vfo->get_sniffer_buffsize() > size) {
+            data = new float[sptr->vfo->get_sniffer_buffsize()];
+        } else if (sptr->vfo->get_sniffer_buffsize() > size) {
             CALLBACK_ON_ERROR(INSUFFICIENT_BUFFER_SIZE);
             return;
         }
 
         int num;
-        vfo->get_sniffer_data(data, num);
+        sptr->vfo->get_sniffer_data(data, num);
 
         CALLBACK_ON_SUCCESS(data, num);
     });
@@ -859,10 +1112,19 @@ void AsyncVfo::getRdsData(Callback<std::string, int> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, callback = std::move(callback)]() mutable {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
         std::string message;
         int num;
-        vfo->get_rds_data(message, num);
+        sptr->vfo->get_rds_data(message, num);
 
         CALLBACK_ON_SUCCESS(std::move(message), num);
     });
@@ -871,48 +1133,75 @@ void AsyncVfo::startRdsDecoder(Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, callback = std::move(callback)]() mutable {
-        if (vfo->is_rds_decoder_active()) {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        if (sptr->vfo->is_rds_decoder_active()) {
             CALLBACK_ON_ERROR(RDS_ALREADY_ACTIVE);
             return;
         }
 
-        vfo->reset_rds_parser();
-        vfo->start_rds_decoder();
+        sptr->vfo->reset_rds_parser();
+        sptr->vfo->start_rds_decoder();
 
         CALLBACK_ON_SUCCESS();
 
-        stateChanged<RdsDecoderStarted>();
+        sptr->stateChanged<RdsDecoderStarted>();
     });
 }
 void AsyncVfo::stopRdsDecoder(Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, callback = std::move(callback)]() mutable {
-        if (!vfo->is_rds_decoder_active()) {
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        if (!sptr->vfo->is_rds_decoder_active()) {
             CALLBACK_ON_ERROR(RDS_ALREADY_INACTIVE);
             return;
         }
 
-        vfo->reset_rds_parser();
-        vfo->stop_rds_decoder();
+        sptr->vfo->reset_rds_parser();
+        sptr->vfo->stop_rds_decoder();
 
         CALLBACK_ON_SUCCESS();
 
-        stateChanged<RdsDecoderStopped>();
+        sptr->stateChanged<RdsDecoderStopped>();
     });
 }
 void AsyncVfo::resetRdsParser(Callback<> callback)
 {
     RETURN_IF_WORKER_BUSY();
 
-    schedule([this, callback = std::move(callback)]() mutable {
-        vfo->reset_rds_parser();
+    std::weak_ptr<AsyncVfo> self =
+        static_pointer_cast<AsyncVfo>(shared_from_this());
+
+    schedule([self, callback = std::move(callback)]() mutable {
+        auto sptr = self.lock();
+        if (!sptr || sptr->m_removed) {
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
+            return;
+        }
+
+        sptr->vfo->reset_rds_parser();
 
         CALLBACK_ON_SUCCESS();
 
-        stateChanged<RdsParserReset>();
+        sptr->stateChanged<RdsParserReset>();
     });
 }
 
@@ -1049,14 +1338,14 @@ void AsyncVfo::subscribe(VfoEventHandler handler, Callback<Connection> callback)
               callback = std::move(callback)]() mutable {
         auto sptr = self.lock();
         if (!sptr || sptr->m_removed) {
-            INVOKE(callback, violetrx::ErrorCode::VFO_NOT_FOUND, {});
+            CALLBACK_ON_ERROR(VFO_NOT_FOUND);
             return;
         }
 
         Connection connection =
             handler ? sptr->signalStateChanged.connect(handler) : Connection{};
 
-        INVOKE(callback, violetrx::ErrorCode::OK, std::move(connection));
+        CALLBACK_ON_SUCCESS(std::move(connection));
 
         if (handler) {
             VfoEventCommon ec;

@@ -20,62 +20,58 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
-#include <iomanip>
 #include <QDebug>
 #include <QFile>
 #include <QPushButton>
-#include <QSettings>
 #include <QString>
-#include <QtGlobal>
 #include <QVariant>
+#include <QtGlobal>
+#include <iomanip>
 
 #include <osmosdr/device.h>
-#include <osmosdr/source.h>
 #include <osmosdr/ranges.h>
+#include <osmosdr/source.h>
 
 #include "ioconfig.h"
 #include "ui_ioconfig.h"
 
-CIoConfig::CIoConfig(QSettings * settings,
-                     std::map<QString, QVariant> &devList,
-                     QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::CIoConfig),
-    m_settings(settings),
-    m_devList(&devList)
+CIoConfig::CIoConfig(std::map<QString, QVariant>& devList, QWidget* parent) :
+    QDialog(parent), ui(new Ui::CIoConfig), m_devList(&devList)
 {
     ui->setupUi(this);
 
     // update input device list
-    updateInDev(settings, *m_devList);
+    updateInDev(*m_devList);
 
     // input rate
-    updateInputSampleRates(settings->value("input/sample_rate", 0).toInt());
+    updateInputSampleRates(0);
 
     // decimation
-    int idx = decim2idx(settings->value("input/decimation", 0).toInt());
+    int idx = decim2idx(1);
     ui->decimCombo->setCurrentIndex(idx);
     decimationChanged(idx);
 
     // Analog bandwidth
-    ui->bwSpinBox->setValue(1.0e-6*settings->value("input/bandwidth", 0.0).toDouble());
+    ui->bwSpinBox->setValue(0);
 
     // LNB LO
-    ui->loSpinBox->setValue(1.0e-6 * settings->value("input/lnb_lo", 0.0).toDouble());
-
-    // Output device
-    updateOutDev();
+    ui->loSpinBox->setValue(0);
 
     m_scanButton = new QPushButton("&Device scan", ui->buttonBox);
-    ui->buttonBox->addButton(m_scanButton, QDialogButtonBox::ButtonRole::ActionRole);
+    ui->buttonBox->addButton(m_scanButton,
+                             QDialogButtonBox::ButtonRole::ActionRole);
 
     // Signals and slots
-    connect(this, SIGNAL(accepted()), this, SLOT(saveConfig()));
-    connect(ui->inDevCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(inputDeviceSelected(int)));
-    connect(ui->inDevEdit, SIGNAL(textChanged(QString)), this, SLOT(inputDevstrChanged(QString)));
-    connect(ui->inSrCombo, SIGNAL(editTextChanged(QString)), this, SLOT(inputRateChanged(QString)));
-    connect(ui->decimCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(decimationChanged(int)));
-    connect(m_scanButton, SIGNAL(clicked(bool)), this, SLOT(onScanButtonClicked()));
+    connect(ui->inDevCombo, SIGNAL(currentIndexChanged(int)), this,
+            SLOT(inputDeviceSelected(int)));
+    connect(ui->inDevEdit, SIGNAL(textChanged(QString)), this,
+            SLOT(inputDevstrChanged(QString)));
+    connect(ui->inSrCombo, SIGNAL(editTextChanged(QString)), this,
+            SLOT(inputRateChanged(QString)));
+    connect(ui->decimCombo, SIGNAL(currentIndexChanged(int)), this,
+            SLOT(decimationChanged(int)));
+    connect(m_scanButton, SIGNAL(clicked(bool)), this,
+            SLOT(onScanButtonClicked()));
 }
 
 CIoConfig::~CIoConfig()
@@ -87,62 +83,21 @@ CIoConfig::~CIoConfig()
 /**
  * @brief get the list of devices
  */
-void CIoConfig::getDeviceList(std::map<QString, QVariant> &devList)
+void CIoConfig::getDeviceList(std::map<QString, QVariant>& devList)
 {
-    QString         devstr;
-    QString         devlabel;
-
-    // automatic discovery of FCD does not work on Mac
-    // so we do it ourselves
-#if defined(Q_OS_DARWIN)
-#ifdef WITH_PORTAUDIO
-    portaudio_device_list       devices;
-    vector<portaudio_device>    inDevList = devices.get_input_devices();
-#else
-    osxaudio_device_list        devices;
-    vector<osxaudio_device>     inDevList = devices.get_input_devices();
-#endif
-    string this_dev;
-    for (auto &device : inDevList)
-    {
-        this_dev = device.get_name();
-        if (this_dev.find("FUNcube Dongle V1.0") != string::npos)
-        {
-            devstr = "fcd,type=1,device='FUNcube Dongle V1.0'";
-            devList.insert(std::pair<QString, QVariant>(QString("FUNcube Dongle V1.0"), QVariant(devstr)));
-        }
-        else if (this_dev.find("FUNcube Dongle V1_0") != string::npos)      // since OS X 10.11.4
-        {
-            devstr = "fcd,type=1,device='FUNcube Dongle V1_0'";
-            devList.insert(std::pair<QString, QVariant>(QString("FUNcube Dongle V1_0"), QVariant(devstr)));
-        }
-        else if (this_dev.find("FUNcube Dongle V2.0") != string::npos)
-        {
-            devstr = "fcd,type=2,device='FUNcube Dongle V2.0'";
-            devList.insert(std::pair<QString, QVariant>(QString("FUNcube Dongle V2.0"), QVariant(devstr)));
-        }
-        else if (this_dev.find("FUNcube Dongle V2_0") != string::npos)      // since OS X 10.11.4
-        {
-            devstr = "fcd,type=2,device='FUNcube Dongle V2_0'";
-            devList.insert(std::pair<QString, QVariant>(QString("FUNcube Dongle V2_0"), QVariant(devstr)));
-        }
-    }
-#endif
+    QString devstr;
+    QString devlabel;
 
     // Get list of input devices discovered by gr-osmosdr and store them in
     // the device list together with the device descriptor strings
     osmosdr::devices_t devs = osmosdr::device::find();
 
     qDebug() << __FUNCTION__ << ": Available input devices:";
-    for (auto &dev : devs)
-    {
-        if (dev.count("label"))
-        {
+    for (auto& dev : devs) {
+        if (dev.count("label")) {
             devlabel = QString(dev["label"].c_str());
             dev.erase("label");
-        }
-        else
-        {
+        } else {
             devlabel = "Unknown";
         }
 
@@ -151,65 +106,6 @@ void CIoConfig::getDeviceList(std::map<QString, QVariant> &devList)
         qDebug() << "  " << devlabel;
     }
 }
-
-/** Save configuration. */
-void CIoConfig::saveConfig()
-{
-    int         idx;
-    int         int_val;
-    bool        conv_ok;
-
-    qDebug() << __FUNCTION__;
-
-    idx = ui->outDevCombo->currentIndex();
-
-#if defined(WITH_PULSEAUDIO) || defined(WITH_PORTAUDIO) || defined(Q_OS_DARWIN)
-    if (idx > 0)
-    {
-          qDebug() << "Output device" << idx << ":" << QString(outDevList[idx-1].get_name().c_str());
-          m_settings->setValue("output/device", QString(outDevList[idx-1].get_name().c_str()));
-    }
-#else
-    if (idx > 0 || ui->outDevCombo->currentText() != "Default")
-    {
-        qDebug() << "Output device:" << ui->outDevCombo->currentText();
-        m_settings->setValue("output/device", ui->outDevCombo->currentText());
-    }
-#endif
-    else
-    {
-        m_settings->remove("output/device");
-    }
-
-    // input settings
-    m_settings->setValue("input/device", ui->inDevEdit->text());  // "OK" button disabled if empty
-
-    qint64 value = (qint64)(ui->bwSpinBox->value()*1.e6);
-    if (value)
-        m_settings->setValue("input/bandwidth", value);
-    else
-        m_settings->remove("input/bandwidth");
-
-    value = (qint64)(ui->loSpinBox->value()*1.e6);
-    if (value)
-        m_settings->setValue("input/lnb_lo", value);
-    else
-        m_settings->remove("input/lnb_lo");
-
-    int_val = ui->inSrCombo->currentText().toInt(&conv_ok);
-    if (conv_ok)
-        m_settings->setValue("input/sample_rate", int_val);
-    else
-        m_settings->remove("input/sample_rate");
-
-    idx = ui->decimCombo->currentIndex();
-    int_val = idx2decim(idx);
-    if (int_val < 2)
-        m_settings->remove("input/decimation");
-    else
-        m_settings->setValue("input/decimation", int_val);
-}
-
 
 /**
  * @brief Update list of sample rates based on selected device.
@@ -222,19 +118,15 @@ void CIoConfig::updateInputSampleRates(int rate)
     if (ui->inDevEdit->text().isEmpty())
         return;
 
-    if (ui->inDevEdit->text().contains("fcd"))
-    {
-        if (ui->inDevCombo->currentText().contains("V2"))   // V2.0 or V2_0
+    if (ui->inDevEdit->text().contains("fcd")) {
+        if (ui->inDevCombo->currentText().contains("V2")) // V2.0 or V2_0
         {
             ui->inSrCombo->addItem("192000");
-        }
-        else
-        {
+        } else {
             ui->inSrCombo->addItem("96000");
         }
-    }
-    else if (ui->inDevEdit->text().contains("rtl") || ui->inDevEdit->text().contains("rtl_tcp"))
-    {
+    } else if (ui->inDevEdit->text().contains("rtl") ||
+               ui->inDevEdit->text().contains("rtl_tcp")) {
         ui->inSrCombo->addItem("240000");
         ui->inSrCombo->addItem("300000");
         ui->inSrCombo->addItem("960000");
@@ -247,18 +139,13 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("2400000");
         ui->inSrCombo->addItem("2880000");
         ui->inSrCombo->addItem("3200000");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->addItem(QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(12);
-        }
-        else
-        {
+        } else {
             ui->inSrCombo->setCurrentIndex(7);
         }
-    }
-    else if (ui->inDevEdit->text().contains("uhd"))
-    {
+    } else if (ui->inDevEdit->text().contains("uhd")) {
         if (rate > 0)
             ui->inSrCombo->addItem(QString("%1").arg(rate));
         ui->inSrCombo->addItem("250000");
@@ -266,9 +153,7 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("2000000");
         ui->inSrCombo->addItem("4000000");
         ui->inSrCombo->addItem("8000000");
-    }
-    else if (ui->inDevEdit->text().contains("hackrf"))
-    {
+    } else if (ui->inDevEdit->text().contains("hackrf")) {
         if (rate > 0)
             ui->inSrCombo->addItem(QString("%1").arg(rate));
         ui->inSrCombo->addItem("8000000");
@@ -276,9 +161,7 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("12500000");
         ui->inSrCombo->addItem("16000000");
         ui->inSrCombo->addItem("20000000");
-    }
-    else if (ui->inDevEdit->text().contains("bladerf"))
-    {
+    } else if (ui->inDevEdit->text().contains("bladerf")) {
         if (rate > 0)
             ui->inSrCombo->addItem(QString("%1").arg(rate));
         ui->inSrCombo->addItem("5000000");
@@ -290,9 +173,7 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("30000000");
         ui->inSrCombo->addItem("35000000");
         ui->inSrCombo->addItem("40000000");
-    }
-    else if (ui->inDevEdit->text().contains("sdr-iq"))
-    {
+    } else if (ui->inDevEdit->text().contains("sdr-iq")) {
         ui->inSrCombo->addItem("8138");
         ui->inSrCombo->addItem("16276");
         ui->inSrCombo->addItem("37793");
@@ -300,16 +181,12 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("111111");
         ui->inSrCombo->addItem("158730");
         ui->inSrCombo->addItem("196078");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(4); // select 111.111 kHz
-    }
-    else if (ui->inDevEdit->text().contains("sdr-ip"))
-    {
+    } else if (ui->inDevEdit->text().contains("sdr-ip")) {
         ui->inSrCombo->addItem("31250");
         ui->inSrCombo->addItem("32000");
         ui->inSrCombo->addItem("40000");
@@ -329,16 +206,12 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("1000000");
         ui->inSrCombo->addItem("1600000");
         ui->inSrCombo->addItem("2000000");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(11); // select 250 kHz
-    }
-    else if (ui->inDevEdit->text().contains("netsdr"))
-    {
+    } else if (ui->inDevEdit->text().contains("netsdr")) {
         ui->inSrCombo->addItem("32000");
         ui->inSrCombo->addItem("40000");
         ui->inSrCombo->addItem("50000");
@@ -359,16 +232,12 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("1000000");
         ui->inSrCombo->addItem("1250000");
         ui->inSrCombo->addItem("2000000");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(11); // select 250 kHz
-    }
-    else if (ui->inDevEdit->text().contains("cloudiq"))
-    {
+    } else if (ui->inDevEdit->text().contains("cloudiq")) {
         ui->inSrCombo->addItem("48000");
         ui->inSrCombo->addItem("61440");
         ui->inSrCombo->addItem("96000");
@@ -382,16 +251,12 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("1024000");
         ui->inSrCombo->addItem("1228800");
         ui->inSrCombo->addItem("1807058");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(4); // select 240 kHz
-    }
-    else if (ui->inDevEdit->text().contains("airspyhf"))
-    {
+    } else if (ui->inDevEdit->text().contains("airspyhf")) {
         ui->inSrCombo->addItem("192000");
         ui->inSrCombo->addItem("256000");
         ui->inSrCombo->addItem("384000");
@@ -399,17 +264,14 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("768000");
         ui->inSrCombo->addItem("912000");
 
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(4); // select 768 kHz
     }
     // NB: must list airspyhf first
-    else if (ui->inDevEdit->text().contains("airspy"))
-    {
+    else if (ui->inDevEdit->text().contains("airspy")) {
         if (rate > 0)
             ui->inSrCombo->addItem(QString("%1").arg(rate));
 
@@ -417,25 +279,19 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("3000000");
         ui->inSrCombo->addItem("6000000");
         ui->inSrCombo->addItem("10000000");
-    }
-    else if (ui->inDevEdit->text().contains("redpitaya"))
-    {
+    } else if (ui->inDevEdit->text().contains("redpitaya")) {
         ui->inSrCombo->addItem("20000");
         ui->inSrCombo->addItem("50000");
         ui->inSrCombo->addItem("100000");
         ui->inSrCombo->addItem("250000");
         ui->inSrCombo->addItem("500000");
         ui->inSrCombo->addItem("1250000");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(3); // select 250 kHz
-    }
-    else if (ui->inDevEdit->text().contains("sdrplay"))
-    {
+    } else if (ui->inDevEdit->text().contains("sdrplay")) {
         ui->inSrCombo->addItem("62500");
         ui->inSrCombo->addItem("125000");
         ui->inSrCombo->addItem("250000");
@@ -450,20 +306,16 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("8000000");
         ui->inSrCombo->addItem("9000000");
         ui->inSrCombo->addItem("10000000");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             if (rate < 62500)
                 rate = 62500;
             if (rate > 10000000)
                 rate = 10000000;
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(5); // select 2 MHz
-    }
-    else if (ui->inDevEdit->text().contains("lime"))
-    {
+    } else if (ui->inDevEdit->text().contains("lime")) {
         ui->inSrCombo->addItem("100000");
         ui->inSrCombo->addItem("500000");
         ui->inSrCombo->addItem("1000000");
@@ -472,16 +324,12 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("10000000");
         ui->inSrCombo->addItem("20000000");
         ui->inSrCombo->addItem("50000000");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(4); // select 5 MHz
-    }
-    else if (ui->inDevEdit->text().contains("plutosdr"))
-    {
+    } else if (ui->inDevEdit->text().contains("plutosdr")) {
         ui->inSrCombo->addItem("600000");
         ui->inSrCombo->addItem("1000000");
         ui->inSrCombo->addItem("1500000");
@@ -491,16 +339,12 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("16000000");
         ui->inSrCombo->addItem("20000000");
         ui->inSrCombo->addItem("56000000");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(2); // select 2 MHz
-    }
-    else if (ui->inDevEdit->text().contains("perseus"))
-    {
+    } else if (ui->inDevEdit->text().contains("perseus")) {
         ui->inSrCombo->addItem("48000");
         ui->inSrCombo->addItem("95000");
         ui->inSrCombo->addItem("96000");
@@ -511,16 +355,12 @@ void CIoConfig::updateInputSampleRates(int rate)
         ui->inSrCombo->addItem("1000000");
         ui->inSrCombo->addItem("1600000");
         ui->inSrCombo->addItem("2000000");
-        if (rate > 0)
-        {
+        if (rate > 0) {
             ui->inSrCombo->insertItem(0, QString("%1").arg(rate));
             ui->inSrCombo->setCurrentIndex(0);
-        }
-        else
+        } else
             ui->inSrCombo->setCurrentIndex(4); // select 192 kHz
-    }
-    else
-    {
+    } else {
         if (rate > 0)
             ui->inSrCombo->addItem(QString("%1").arg(rate));
     }
@@ -537,11 +377,11 @@ void CIoConfig::updateInputSampleRates(int rate)
  */
 void CIoConfig::updateDecimations(void)
 {
-    bool        ok;
-    int         rate;
+    bool ok;
+    int rate;
 
     // get current sample rate from combo box
-    rate= ui->inSrCombo->currentText().toInt(&ok);
+    rate = ui->inSrCombo->currentText().toInt(&ok);
     if (!ok || rate < 0)
         return;
 
@@ -561,30 +401,24 @@ void CIoConfig::updateDecimations(void)
         ui->decimCombo->addItem("64", 0);
     if (rate >= 6144000)
         ui->decimCombo->addItem("128", 0);
-//    if (rate >= 12288000)
-//        ui->decimCombo->addItem("256", 0);
-//    if (rate >= 24576000)
-//        ui->decimCombo->addItem("512", 0);
 
     decimationChanged(0);
 }
 
-void CIoConfig::updateInDev(const QSettings *settings, const std::map<QString, QVariant> &devList)
+void CIoConfig::updateInDev(const std::map<QString, QVariant>& devList)
 {
-    QString indev = settings->value("input/device", "").toString();
-    bool cfgmatch = false; //flag to indicate that device from config was found
+    QString indev = "";
+    bool cfgmatch = false; // flag to indicate that device from config was found
 
     // insert the device list in device combo box
     ui->inDevCombo->clear();
     int i = 0;
-    for (auto it = devList.cbegin(); it != devList.cend(); it++, i++)
-    {
+    for (auto it = devList.cbegin(); it != devList.cend(); it++, i++) {
         auto devstr = (*it).second.toString();
         ui->inDevCombo->addItem((*it).first, devstr);
 
         // is this the device stored in config?
-        if (indev == devstr)
-        {
+        if (indev == devstr) {
             ui->inDevCombo->setCurrentIndex(i);
             ui->inDevEdit->setText(devstr);
             cfgmatch = true;
@@ -596,85 +430,19 @@ void CIoConfig::updateInDev(const QSettings *settings, const std::map<QString, Q
     // If device string from config is not one of the detected devices
     // it could be that device is not plugged in (in which case we select
     // other) or that this is the first time (select the first detected device).
-    if (!cfgmatch)
-    {
-        if (indev.isEmpty())
-        {
+    if (!cfgmatch) {
+        if (indev.isEmpty()) {
             // First time config: select the first detected device
             ui->inDevCombo->setCurrentIndex(0);
             ui->inDevEdit->setText(ui->inDevCombo->itemData(0).toString());
             if (ui->inDevEdit->text().isEmpty())
                 ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
-        }
-        else
-        {
+        } else {
             // Select other
             ui->inDevCombo->setCurrentIndex(i);
             ui->inDevEdit->setText(indev);
         }
     }
-}
-
-void CIoConfig::updateOutDev()
-{
-    QString outdev = m_settings->value("output/device", "").toString();
-
-    ui->outDevCombo->clear();
-    ui->outDevCombo->addItem("Default");
-
-    // get list of audio output devices
-#ifdef WITH_PULSEAUDIO
-   pa_device_list devices;
-   outDevList = devices.get_output_devices();
-
-   qDebug() << __FUNCTION__ << ": Available output devices:";
-   for (size_t i = 0; i < outDevList.size(); i++)
-   {
-       qDebug() << "   " << i << ":" << QString(outDevList[i].get_description().c_str());
-       //qDebug() << "     " << QString(outDevList[i].get_name().c_str());
-       ui->outDevCombo->addItem(QString(outDevList[i].get_description().c_str()));
-
-       // note that item #i in devlist will be item #(i+1)
-       // in combo box due to "default"
-       if (outdev == QString(outDevList[i].get_name().c_str()))
-           ui->outDevCombo->setCurrentIndex(i+1);
-   }
-#elif WITH_PORTAUDIO
-   portaudio_device_list   devices;
-
-   outDevList = devices.get_output_devices();
-   for (size_t i = 0; i < outDevList.size(); i++)
-   {
-       ui->outDevCombo->addItem(QString(outDevList[i].get_description().c_str()));
-
-       // note that item #i in devlist will be item #(i+1)
-       // in combo box due to "default"
-       if (outdev == QString(outDevList[i].get_name().c_str()))
-           ui->outDevCombo->setCurrentIndex(i+1);
-   }
-   //ui->outDevCombo->setEditable(true);
-
-#elif defined(Q_OS_DARWIN)
-   osxaudio_device_list devices;
-   outDevList = devices.get_output_devices();
-
-   qDebug() << __FUNCTION__ << ": Available output devices:";
-   for (size_t i = 0; i < outDevList.size(); i++)
-   {
-       qDebug() << "   " << i << ":" << QString(outDevList[i].get_name().c_str());
-       ui->outDevCombo->addItem(QString(outDevList[i].get_name().c_str()));
-
-       // note that item #i in devlist will be item #(i+1)
-       // in combo box due to "default"
-       if (outdev == QString(outDevList[i].get_name().c_str()))
-           ui->outDevCombo->setCurrentIndex(i+1);
-   }
-
-#else
-   ui->outDevCombo->addItem(m_settings->value("output/device", "Default").toString(),
-                            m_settings->value("output/device", "Default").toString());
-   ui->outDevCombo->setEditable(true);
-#endif // WITH_PULSEAUDIO
 }
 
 /**
@@ -691,16 +459,15 @@ void CIoConfig::inputDeviceSelected(int index)
     updateInputSampleRates(0);
 }
 
-
 /**
  * @brief Input device string has changed
  * @param text THe new device string
  *
- * This slot is activated when the device string in the text edit box has changed
- * either by the user or programmatically. We use this to enable/disable the OK
- * button - we allo OK only if there is some text in the text entry.
+ * This slot is activated when the device string in the text edit box has
+ * changed either by the user or programmatically. We use this to enable/disable
+ * the OK button - we allo OK only if there is some text in the text entry.
  */
-void CIoConfig::inputDevstrChanged(const QString &text)
+void CIoConfig::inputDevstrChanged(const QString& text)
 {
     if (text.isEmpty())
         ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
@@ -712,9 +479,9 @@ void CIoConfig::inputDevstrChanged(const QString &text)
  * @brief Sample changed, either by selection of direct entry.
  * @param text The new sample rate.
  */
-void CIoConfig::inputRateChanged(const QString &text)
+void CIoConfig::inputRateChanged(const QString& text)
 {
-    (void) text;
+    (void)text;
     updateDecimations();
 }
 
@@ -727,10 +494,10 @@ void CIoConfig::inputRateChanged(const QString &text)
  */
 void CIoConfig::decimationChanged(int index)
 {
-    float       quad_rate;
-    int         input_rate;
-    int         decim;
-    bool        ok;
+    float quad_rate;
+    int input_rate;
+    int decim;
+    bool ok;
 
     decim = idx2decim(index);
     input_rate = ui->inSrCombo->currentText().toInt(&ok);
@@ -739,11 +506,11 @@ void CIoConfig::decimationChanged(int index)
 
     quad_rate = (float)input_rate / (float)decim;
     if (quad_rate > 1.e6f)
-        ui->sampRateLabel->setText(QString(" %1 Msps").
-                                   arg(quad_rate * 1.e-6f, 0, 'f', 3));
+        ui->sampRateLabel->setText(
+            QString(" %1 Msps").arg(quad_rate * 1.e-6f, 0, 'f', 3));
     else
-        ui->sampRateLabel->setText(QString(" %1 ksps").
-                                   arg(quad_rate * 1.e-3f, 0, 'f', 3));
+        ui->sampRateLabel->setText(
+            QString(" %1 ksps").arg(quad_rate * 1.e-3f, 0, 'f', 3));
 }
 
 /**
@@ -753,8 +520,7 @@ void CIoConfig::onScanButtonClicked()
 {
     m_devList->clear();
     CIoConfig::getDeviceList(*m_devList);
-    updateInDev(m_settings, *m_devList);
-    updateOutDev();
+    updateInDev(*m_devList);
 }
 
 /** Convert a combo box index to decimation. */
@@ -769,7 +535,7 @@ int CIoConfig::idx2decim(int idx) const
 /** Convert a decimation to a combobox index */
 int CIoConfig::decim2idx(int decim) const
 {
-    int         idx;
+    int idx;
 
     if (decim == 0)
         return 0;
@@ -781,7 +547,8 @@ int CIoConfig::decim2idx(int decim) const
     return idx;
 }
 
-/** Escape devstr to make some SoapySDR devices work when selected from drop-down */
+/** Escape devstr to make some SoapySDR devices work when selected from
+ * drop-down */
 std::string CIoConfig::escapeDevstr(std::string devstr)
 {
     std::stringstream ss1;
@@ -790,3 +557,5 @@ std::string CIoConfig::escapeDevstr(std::string devstr)
     ss1 << std::quoted(devstr, '\'', '\\');
     return ss1.str();
 }
+
+QString CIoConfig::getInputDevice() { return ui->inDevEdit->text(); }

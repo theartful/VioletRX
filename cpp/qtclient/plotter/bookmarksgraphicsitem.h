@@ -3,7 +3,11 @@
 
 #include <QGraphicsObject>
 
-class BookmarkInfo;
+struct BookmarkInfo {
+    QString name;
+    QColor color;
+    qint64 frequency;
+};
 
 class BookmarksGraphicsItem : public QGraphicsObject
 {

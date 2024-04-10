@@ -2,13 +2,15 @@
 #include <gflags/gflags.h>
 #include <spdlog/spdlog.h>
 
-#include "async_core/events_format.h"
+#include "async_core/events_format.h" // IWYU pragma: keep
 #include "grpc/client.h"
 
 DEFINE_string(url, "0.0.0.0:50050", "Server URL");
 
 int main()
 {
+    spdlog::set_level(spdlog::level::debug);
+
     violetrx::GrpcClient client{FLAGS_url};
     client.Subscribe([](const violetrx::Event& event) { spdlog::info(event); });
 
