@@ -27,11 +27,17 @@ WorkerThread::~WorkerThread()
     }
 
     // Print all enqueued tasks for debugging
-    spdlog::debug("\tUnfinished Tasks:");
+    fmt::memory_buffer buffer;
     {
+        int count = 0;
         Task task;
         while (tasks.try_dequeue(task)) {
-            spdlog::debug("\t\t{}", task.cmd);
+            if (count == 0) {
+                spdlog::debug("\tUnfinished Tasks:");
+            }
+            count++;
+
+            spdlog::debug("\t\t{}:\t{}", count, task.cmd);
         }
     }
 }

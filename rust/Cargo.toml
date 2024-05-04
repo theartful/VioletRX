@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    "egui-client",
+    "violetrx-traits",
+]
+
+[workspace.package]
+edition = "2021"
+license = "GPL-3.0"
+version = "0.1.0"
+
+[workspace.dependencies]
+violetrx-traits = { path = "violetrx-traits" }
+log = { version = "0.4", features = ["std"] }

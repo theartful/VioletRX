@@ -723,8 +723,6 @@ public:
 
         std::optional<Event> maybe_event = EventProtoToCore(response_);
         if (maybe_event.has_value()) {
-            spdlog::info("{}", *maybe_event);
-
             const Event& event = *maybe_event;
 
             if (std::holds_alternative<Unsubscribed>(event)) {

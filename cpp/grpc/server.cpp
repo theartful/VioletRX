@@ -1,5 +1,6 @@
 #include <atomic>
 #include <chrono>
+#include <mutex>
 #include <queue>
 
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
@@ -13,6 +14,7 @@
 #include "receiver.pb.h"
 #include "server.h"
 #include "type_conversion.h"
+#include "utility/assert.h"
 #include "utility/worker_thread.h"
 
 namespace violetrx
@@ -1074,10 +1076,10 @@ public:
         context_{context},
         server_{server},
         finished_{false},
-        unsubscribed_{false}
+        unsubscribed_{false},
+        peer{context_->peer()}
     {
-        spdlog::info("GrpcServer: Client ({}) has subscribed",
-                     context_->peer());
+        spdlog::info("GrpcServer: Client ({}) has subscribed", peer);
 
         server_->async_receiver_->synchronize([this](ErrorCode err) {
             if (err != ErrorCode::OK) {
@@ -1118,7 +1120,8 @@ public:
             events_reader_ = server_->events_queue_.subscribe();
 
             // Let's send the first sync event (SyncStart)
-            WriteSyncEvent();
+            bool success = WriteSyncEvent();
+            VIOLET_ASSERT(success);
 
             // Start the worker thread, which will be used to wait on the events
             // queue.
@@ -1126,13 +1129,26 @@ public:
         });
     }
 
-    void WriteSyncEvent()
+    bool WriteSyncEvent()
     {
-        bool convertible_event;
-        do {
-            convertible_event = WriteEvent(sync_events_.front());
+        // Without this lock, a potential race condition can happen here in the
+        // loop. Once WriteEvent is done, writing might finished, and
+        // OnWriteDone might be called, which will call WriteSyncEvent, which
+        // will access the queue at the same time that this thread will have to
+        // access the queue one last time to check whether it's empty or not.
+        // This can be solved by reading the size before Writing the event, but
+        // we will have to synchronize using atomics somehow to prevent
+        // reordering of operations. This is simpler.
+        std::scoped_lock<std::mutex> lk{sync_events_mtx_};
+
+        bool success = false;
+        while (!sync_events_.empty() && !success) {
+            Event event = std::move(sync_events_.front());
             sync_events_.pop();
-        } while (!convertible_event);
+
+            success = WriteEvent(event);
+        }
+        return success;
     }
 
     void WaitAndWriteEvent()
@@ -1156,14 +1172,18 @@ public:
                 // Keep trying!
                 break;
             case broadcast_queue::Error::Lagged:
-                spdlog::info("Client ({}) lagged. Disconnecting...",
-                             context_->peer());
+                spdlog::info("Client ({}) lagged. Disconnecting...", peer);
                 FinishIfNotAlreadyFinished(grpc::Status::CANCELLED);
                 return;
 
             case broadcast_queue::Error::Closed:
                 // Events queue closed. This can only mean that we're shutting
                 // down. So we just return.
+                FinishIfNotAlreadyFinished(grpc::Status::CANCELLED);
+                return;
+            }
+
+            if (context_->IsCancelled()) {
                 FinishIfNotAlreadyFinished(grpc::Status::CANCELLED);
                 return;
             }
@@ -1197,26 +1217,29 @@ public:
     {
         if (!ok) {
             spdlog::info("Failed to send event to ({}). Disconnecting...",
-                         context_->peer());
+                         peer);
             FinishIfNotAlreadyFinished(grpc::Status::OK);
             return;
         }
 
-        // If there are still sync events, let's write it.
-        if (!sync_events_.empty()) {
-            WriteSyncEvent();
-        } else if (unsubscribed_) {
+        if (unsubscribed_) {
             Finish(grpc::Status::OK);
-        } else {
-            worker_thread_.schedule("WaitAndWriteEvent",
-                                    [this]() { WaitAndWriteEvent(); });
+            return;
         }
+
+        // If there are still sync events, let's write it.
+        if (WriteSyncEvent()) {
+            return;
+        }
+
+        // Otherwise, wait for a new event.
+        worker_thread_.schedule("WaitAndWriteEvent",
+                                [this]() { WaitAndWriteEvent(); });
     }
 
     void OnDone() override
     {
-        spdlog::info("GrpcServer: Finished dealing with ({})",
-                     context_->peer());
+        spdlog::info("GrpcServer: Finished dealing with ({})", peer);
         // Very scary!
         delete this;
     }
@@ -1229,6 +1252,7 @@ private:
     // First events to send, and after we finish them, we read from the
     // broadcast_queue
     std::queue<Event> sync_events_;
+    std::mutex sync_events_mtx_;
     broadcast_queue::receiver<Event> events_reader_;
 
     // Is using a worker thread an overkill? Maybe use a raw thread?
@@ -1238,6 +1262,9 @@ private:
     // thread. They never intersect, but just to be safe.
     std::atomic<bool> finished_;
     std::atomic<bool> unsubscribed_;
+
+    // context_->peer() becomes "unknown" once the client is disconnected.
+    std::string peer;
 };
 
 grpc::ServerWriteReactor<Receiver::Event>*

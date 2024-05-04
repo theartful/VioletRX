@@ -5,3 +5,6 @@ Cargo.lock
 *.rs.bk
 *.pdb
 .gdb_history
+node_modules/
+gen/
+dist/

@@ -1,16 +1,31 @@
 [package]
 name = "egui-client"
+authors = ["Ahmed Essam <aessam.dahy@gmail.com>"]
 version = "0.1.0"
-edition = "2021"
+license.workspace = true
+edition.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-violetrx-c = { path = "../violetrx-c/" }
-violetrx-traits = { path = "../violetrx-traits/" }
-futures = "0.3.28"
-tokio = { version = "1.23.0", features = ["rt-multi-thread", "macros", "time"] }
-tokio-util = "0.7.8"
 anyhow = "1.0.72"
-eframe = "0.22.0"
-egui_extras = { version = "0.22.0", features = ["svg"] }
+eframe = { version = "0.27.2", features = ["default", "glow"] }
+egui = "0.27.2"
+egui_glow = "0.27.2"
+egui_extras = { version = "0.27.2", features = ["default", "all_loaders"] }
+violetrx-traits = { workspace = true }
+wgpu = { version = "0.19.1", default-features = false, features = [
+    # Make the renderer `Sync` even on wasm32, because it makes the code simpler:
+    "fragile-send-sync-non-atomic-wasm",
+    "webgpu",
+    "webgl",
+] }
+glow = "0.13"
+log.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.90"
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3"
+

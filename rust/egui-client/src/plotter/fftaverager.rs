@@ -69,10 +69,6 @@ impl FftAverager {
         self.iir_fft_frame.data.clear();
     }
 
-    // I'm not really sure if this is the best signature for this function
-    // Ideally I would like `decimate() -> DecimatedFftFrame`, but this would
-    // not be very efficient since we will be allocating each time this function
-    // is called
     pub fn decimate(&mut self, pixel_viewport: Rect, scene_viewport: Rect) -> &DecimatedFftFrame {
         self.decimated_frame.data.clear();
 

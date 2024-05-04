@@ -1,11 +1,11 @@
 use eframe::{
     egui::{
-        Align2, Color32, Id, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, Vec2, Widget,
+        Align2, Color32, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, Vec2, Widget,
     },
     epaint::{FontFamily, FontId},
 };
 
-use super::fftaverager::{DecimatedFftFrame, FftAverager};
+use super::fftaverager::DecimatedFftFrame;
 
 pub struct Plotter {
     pub scene_viewport: Rect,
@@ -346,7 +346,7 @@ impl Widget for &mut Plotter {
         }
 
         if let Some(pos) = ui.ctx().input(|input| input.pointer.hover_pos()) {
-            let delta = ui.ctx().input(|input| input.scroll_delta.y);
+            let delta = ui.ctx().input(|input| input.smooth_scroll_delta.y);
             if delta != 0.0 {
                 let factor = if delta > 0.0 { -0.08 } else { 0.08 };
                 let pos = self.map_to_scene(response.rect, pos);
