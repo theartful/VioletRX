@@ -46,6 +46,8 @@ dsp
 	stereo_demod.h
 	multichannel_downconverter.h
 	multichannel_downconverter.cpp
+    buffer_sink.h
+    buffer_sink.cpp
 )
 
 target_include_directories(
@@ -70,6 +72,7 @@ PUBLIC
   gnuradio::gnuradio-digital
   gnuradio::gnuradio-filter
   gnuradio::gnuradio-audio
+  broadcast_queue
 
 PRIVATE
   PkgConfig::PC_SNDFILE
